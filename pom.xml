@@ -6,7 +6,7 @@
 	<groupId>org.codelibs.fess</groupId>
 	<artifactId>fess-ds-db</artifactId>
 	<packaging>jar</packaging>
-	<name>JSON Data Store</name>
+	<name>Database Data Store</name>
 	<version>12.2.0-SNAPSHOT</version>
 	<url>http://fess.codelibs.org/</url>
 	<inceptionYear>2009</inceptionYear>
@@ -63,10 +63,10 @@
 		<utflute.version>0.8.5</utflute.version>
 
 		<!-- Crawler -->
-		<crawler.version>2.1.1</crawler.version>
+		<crawler.version>2.2.0-SNAPSHOT</crawler.version>
 
 		<!-- Elasticsearch -->
-		<elasticsearch.version>6.2.4</elasticsearch.version>
+		<elasticsearch.version>6.3.0</elasticsearch.version>
 		<elasticsearch.min.version>6.0.0</elasticsearch.min.version>
 		<cluster.runner.version>${elasticsearch.version}.0</cluster.runner.version>
 
