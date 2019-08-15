@@ -2,7 +2,7 @@
 <!DOCTYPE components PUBLIC "-//DBFLUTE//DTD LastaDi 1.0//EN"
 	"http://dbflute.org/meta/lastadi10.dtd">
 <components>
-	<component name="jsonDataStore" class="org.codelibs.fess.ds.db.DatabaseDataStore">
+	<component name="databaseDataStore" class="org.codelibs.fess.ds.db.DatabaseDataStore">
 		<postConstruct name="register"></postConstruct>
 	</component>
 </components>
