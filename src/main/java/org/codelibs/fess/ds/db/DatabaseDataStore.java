@@ -54,7 +54,7 @@ public class DatabaseDataStore extends AbstractDataStore {
     private static final String DRIVER_PARAM = "driver";
 
     protected String getName() {
-        return "Database";
+        return this.getClass().getSimpleName();
     }
 
     protected String getDriverClass(final Map<String, String> paramMap) {
