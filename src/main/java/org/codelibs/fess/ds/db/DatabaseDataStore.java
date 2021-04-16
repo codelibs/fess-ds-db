@@ -127,6 +127,9 @@ public class DatabaseDataStore extends AbstractDataStore {
                 }
                 for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
                     final Object convertValue = convertValue(entry.getValue(), params);
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("{}: {} -> {}", entry.getKey(), entry.getValue(), convertValue);
+                    }
                     if (convertValue != null) {
                         dataMap.put(entry.getKey(), convertValue);
                     }
@@ -294,6 +297,11 @@ public class DatabaseDataStore extends AbstractDataStore {
         @Override
         public Collection<Object> values() {
             return paramMap.values();
+        }
+
+        @Override
+        public String toString() {
+            return paramMap.toString();
         }
 
     }
