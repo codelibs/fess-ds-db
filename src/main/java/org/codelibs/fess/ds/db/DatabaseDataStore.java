@@ -90,6 +90,7 @@ public class DatabaseDataStore extends AbstractDataStore {
             final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
 
         final long readInterval = getReadInterval(paramMap);
+        final String scriptType = getScriptType(paramMap);
 
         Connection con = null;
         Statement stmt = null;
@@ -126,7 +127,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                     logger.debug("params: {}", params);
                 }
                 for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
-                    final Object convertValue = convertValue(entry.getValue(), params);
+                    final Object convertValue = convertValue(scriptType, entry.getValue(), params);
                     if (logger.isDebugEnabled()) {
                         logger.debug("{}: {} -> {}", entry.getKey(), entry.getValue(), convertValue);
                     }
