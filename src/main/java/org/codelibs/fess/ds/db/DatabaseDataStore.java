@@ -39,6 +39,7 @@ import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.exception.DataStoreException;
 import org.codelibs.fess.exception.FessSystemException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
+import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
@@ -137,7 +138,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                         logger.debug("params: {}", params);
                     }
 
-                    crawlerStatsHelper.record(keyObj, "parsed");
+                    crawlerStatsHelper.record(keyObj, StatsAction.PARSED);
 
                     for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
                         final Object convertValue = convertValue(scriptType, entry.getValue(), params);
@@ -149,13 +150,13 @@ public class DatabaseDataStore extends AbstractDataStore {
                         }
                     }
 
-                    crawlerStatsHelper.record(keyObj, "evaluated");
+                    crawlerStatsHelper.record(keyObj, StatsAction.EVALUATED);
 
                     if (logger.isDebugEnabled()) {
                         logger.debug("dataMap: {}", dataMap);
                     }
                     callback.store(paramMap, dataMap);
-                    crawlerStatsHelper.record(keyObj, "finished");
+                    crawlerStatsHelper.record(keyObj, StatsAction.FINISHED);
                 } catch (final CrawlingAccessException e) {
                     logger.warn("Crawling Access Exception at : " + dataMap, e);
 
@@ -187,13 +188,13 @@ public class DatabaseDataStore extends AbstractDataStore {
                     }
                     final FailureUrlService failureUrlService = ComponentUtil.getComponent(FailureUrlService.class);
                     failureUrlService.store(config, errorName, url, target);
-                    crawlerStatsHelper.record(keyObj, "access_exception");
+                    crawlerStatsHelper.record(keyObj, StatsAction.ACCESS_EXCEPTION);
                 } catch (final Throwable t) {
                     logger.warn("Crawling Access Exception at : " + dataMap, t);
                     final String url = sql + ":" + rs.getRow();
                     final FailureUrlService failureUrlService = ComponentUtil.getComponent(FailureUrlService.class);
                     failureUrlService.store(config, t.getClass().getCanonicalName(), url, t);
-                    crawlerStatsHelper.record(keyObj, "exception");
+                    crawlerStatsHelper.record(keyObj, StatsAction.EXCEPTION);
                 } finally {
                     crawlerStatsHelper.done(keyObj);
                 }
