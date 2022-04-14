@@ -126,7 +126,7 @@ public class DatabaseDataStore extends AbstractDataStore {
             boolean loop = true;
             int count = 0;
             while (rs.next() && loop && alive) {
-                final StatsKeyObject keyObj = new StatsKeyObject(sql.hashCode() + "#" + (++count));
+                final StatsKeyObject keyObj = new StatsKeyObject(config.getId() + "#" + (++count));
                 paramMap.put(Constants.CRAWLER_STATS_KEY, keyObj);
                 final Map<String, Object> dataMap = new HashMap<>(defaultDataMap);
                 final Map<String, Object> crawlingContext = new HashMap<>();
