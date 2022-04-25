@@ -126,19 +126,20 @@ public class DatabaseDataStore extends AbstractDataStore {
             boolean loop = true;
             int count = 0;
             while (rs.next() && loop && alive) {
-                final StatsKeyObject keyObj = new StatsKeyObject(config.getId() + "#" + (++count));
-                paramMap.put(Constants.CRAWLER_STATS_KEY, keyObj);
+                count++;
+                final StatsKeyObject statsKey = new StatsKeyObject(config.getId() + "#" + count);
+                paramMap.put(Constants.CRAWLER_STATS_KEY, statsKey);
                 final Map<String, Object> dataMap = new HashMap<>(defaultDataMap);
                 final Map<String, Object> crawlingContext = new HashMap<>();
                 try {
-                    crawlerStatsHelper.begin(keyObj);
+                    crawlerStatsHelper.begin(statsKey);
                     crawlingContext.put("doc", dataMap);
                     final ResultSetParamMap params = new ResultSetParamMap(config, crawlingContext, rs, paramMap);
                     if (logger.isDebugEnabled()) {
                         logger.debug("params: {}", params);
                     }
 
-                    crawlerStatsHelper.record(keyObj, StatsAction.PARSED);
+                    crawlerStatsHelper.record(statsKey, StatsAction.PARSED);
 
                     for (final Map.Entry<String, String> entry : scriptMap.entrySet()) {
                         final Object convertValue = convertValue(scriptType, entry.getValue(), params);
@@ -150,19 +151,19 @@ public class DatabaseDataStore extends AbstractDataStore {
                         }
                     }
 
-                    crawlerStatsHelper.record(keyObj, StatsAction.EVALUATED);
+                    crawlerStatsHelper.record(statsKey, StatsAction.EVALUATED);
 
                     if (logger.isDebugEnabled()) {
                         logger.debug("dataMap: {}", dataMap);
                     }
                     callback.store(paramMap, dataMap);
-                    crawlerStatsHelper.record(keyObj, StatsAction.FINISHED);
+                    crawlerStatsHelper.record(statsKey, StatsAction.FINISHED);
                 } catch (final CrawlingAccessException e) {
-                    logger.warn("Crawling Access Exception at : " + dataMap, e);
+                    logger.warn("Crawling Access Exception at : {}", dataMap, e);
 
                     Throwable target = e;
-                    if (target instanceof MultipleCrawlingAccessException) {
-                        final Throwable[] causes = ((MultipleCrawlingAccessException) target).getCauses();
+                    if (target instanceof final MultipleCrawlingAccessException ex) {
+                        final Throwable[] causes = ex.getCauses();
                         if (causes.length > 0) {
                             target = causes[causes.length - 1];
                         }
@@ -177,8 +178,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                     }
 
                     String url;
-                    if (target instanceof DataStoreCrawlingException) {
-                        final DataStoreCrawlingException dce = (DataStoreCrawlingException) target;
+                    if (target instanceof DataStoreCrawlingException dce) {
                         url = dce.getUrl();
                         if (dce.aborted()) {
                             loop = false;
@@ -188,15 +188,15 @@ public class DatabaseDataStore extends AbstractDataStore {
                     }
                     final FailureUrlService failureUrlService = ComponentUtil.getComponent(FailureUrlService.class);
                     failureUrlService.store(config, errorName, url, target);
-                    crawlerStatsHelper.record(keyObj, StatsAction.ACCESS_EXCEPTION);
+                    crawlerStatsHelper.record(statsKey, StatsAction.ACCESS_EXCEPTION);
                 } catch (final Throwable t) {
-                    logger.warn("Crawling Access Exception at : " + dataMap, t);
+                    logger.warn("Crawling Access Exception at : {}", dataMap, t);
                     final String url = sql + ":" + rs.getRow();
                     final FailureUrlService failureUrlService = ComponentUtil.getComponent(FailureUrlService.class);
                     failureUrlService.store(config, t.getClass().getCanonicalName(), url, t);
-                    crawlerStatsHelper.record(keyObj, StatsAction.EXCEPTION);
+                    crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION);
                 } finally {
-                    crawlerStatsHelper.done(keyObj);
+                    crawlerStatsHelper.done(statsKey);
                 }
 
                 if (readInterval > 0) {
