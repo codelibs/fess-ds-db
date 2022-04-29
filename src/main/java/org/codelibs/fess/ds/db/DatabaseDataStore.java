@@ -251,7 +251,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                         final String value = resultSet.getString(i + 1);
                         this.paramMap.put(label, value);
                     } catch (final SQLException e) {
-                        logger.warn("Failed to parse data in a result set. The column is " + (i + 1) + ".", e);
+                        logger.warn("Failed to parse data in a result set. The column is {}.", i + 1, e);
                     }
                 }
             } catch (final Exception e) {
