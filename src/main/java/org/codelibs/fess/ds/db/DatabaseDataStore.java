@@ -24,6 +24,7 @@ import java.sql.Statement;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
 
 import org.codelibs.core.lang.StringUtil;
@@ -57,6 +58,8 @@ public class DatabaseDataStore extends AbstractDataStore {
     private static final String USERNAME_PARAM = "username";
 
     private static final String DRIVER_PARAM = "driver";
+
+    private static final String INFO_PREFIX = "info.";
 
     @Override
     protected String getName() {
@@ -105,17 +108,7 @@ public class DatabaseDataStore extends AbstractDataStore {
         try {
             Class.forName(getDriverClass(paramMap));
 
-            final String jdbcUrl = getUrl(paramMap);
-            final String username = getUsername(paramMap);
-            if (logger.isDebugEnabled()) {
-                logger.debug("jdbc: {} : {}", jdbcUrl, username);
-            }
-            final String password = getPassword(paramMap);
-            if (StringUtil.isNotEmpty(username)) {
-                con = DriverManager.getConnection(jdbcUrl, username, password);
-            } else {
-                con = DriverManager.getConnection(jdbcUrl);
-            }
+            con = getConnection(paramMap);
 
             final String sql = getSql(paramMap);
             if (logger.isDebugEnabled()) {
@@ -178,7 +171,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                     }
 
                     String url;
-                    if (target instanceof DataStoreCrawlingException dce) {
+                    if (target instanceof final DataStoreCrawlingException dce) {
                         url = dce.getUrl();
                         if (dce.aborted()) {
                             loop = false;
@@ -231,6 +224,33 @@ public class DatabaseDataStore extends AbstractDataStore {
             }
 
         }
+    }
+
+    protected Connection getConnection(final DataStoreParams paramMap) throws SQLException {
+        final String jdbcUrl = getUrl(paramMap);
+
+        final String username = getUsername(paramMap);
+        if (logger.isDebugEnabled()) {
+            logger.debug("jdbc: {} : {}", jdbcUrl, username);
+        }
+
+        final Properties info = new Properties();
+        if (username != null) {
+            info.put("user", username);
+        }
+
+        final String password = getPassword(paramMap);
+        if (password != null) {
+            info.put("password", password);
+        }
+
+        for (final String key : paramMap.asMap().keySet()) {
+            if (key.startsWith(INFO_PREFIX)) {
+                info.put(key.substring(INFO_PREFIX.length())), paramMap.get(key));
+            }
+        }
+
+        return DriverManager.getConnection(jdbcUrl, info);
     }
 
     protected static class ResultSetParamMap implements Map<String, Object> {
