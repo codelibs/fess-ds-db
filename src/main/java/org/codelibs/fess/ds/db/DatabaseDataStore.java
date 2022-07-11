@@ -246,7 +246,7 @@ public class DatabaseDataStore extends AbstractDataStore {
 
         for (final String key : paramMap.asMap().keySet()) {
             if (key.startsWith(INFO_PREFIX)) {
-                info.put(key.substring(INFO_PREFIX.length())), paramMap.get(key));
+                info.put(key.substring(INFO_PREFIX.length()), paramMap.get(key));
             }
         }
 
