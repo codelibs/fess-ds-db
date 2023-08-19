@@ -15,8 +15,17 @@
  */
 package org.codelibs.fess.ds.db;
 
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.Reader;
+import java.nio.charset.StandardCharsets;
+import java.sql.Array;
+import java.sql.Blob;
+import java.sql.Clob;
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.NClob;
+import java.sql.Ref;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -27,6 +36,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 
+import org.apache.commons.io.IOUtils;
+import org.codelibs.core.io.InputStreamUtil;
+import org.codelibs.core.io.ReaderUtil;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.Constants;
 import org.codelibs.fess.app.service.FailureUrlService;
@@ -268,16 +280,59 @@ public class DatabaseDataStore extends AbstractDataStore {
                 for (int i = 0; i < columnCount; i++) {
                     try {
                         final String label = metaData.getColumnLabel(i + 1);
-                        final String value = resultSet.getString(i + 1);
+                        final String value = getColumnValue(resultSet, i + 1);
                         this.paramMap.put(label, value);
-                    } catch (final SQLException e) {
+                    } catch (final IOException | SQLException e) {
                         logger.warn("Failed to parse data in a result set. The column is {}.", i + 1, e);
                     }
                 }
             } catch (final Exception e) {
                 throw new FessSystemException("Failed to access meta data.", e);
             }
+        }
 
+        protected String getColumnValue(final ResultSet resultSet, final int columnIndex) throws IOException, SQLException {
+            final Object obj = resultSet.getObject(columnIndex);
+            if (obj instanceof final Blob value) {
+                try (final InputStream in = value.getBinaryStream()) {
+                    return new String(InputStreamUtil.getBytes(in), StandardCharsets.UTF_8);
+                }
+            }
+            if (obj instanceof final byte[] value) {
+                return new String(value, StandardCharsets.UTF_8);
+            } else if (obj instanceof final Clob value) {
+                try (final Reader reader = value.getCharacterStream()) {
+                    return ReaderUtil.readText(reader);
+                }
+            } else if (obj instanceof final NClob value) {
+                try (final Reader reader = value.getCharacterStream()) {
+                    return ReaderUtil.readText(reader);
+                }
+            } else if (obj instanceof final Ref value) {
+                return value.getObject().toString();
+            } else if (obj instanceof final InputStream value) {
+                try {
+                    return new String(InputStreamUtil.getBytes(value), StandardCharsets.UTF_8);
+                } finally {
+                    IOUtils.closeQuietly(value);
+                }
+            } else if (obj instanceof final Reader value) {
+                try {
+                    return ReaderUtil.readText(value);
+                } finally {
+                    IOUtils.closeQuietly(value);
+                }
+            } else if (obj instanceof final Array value) {
+                final ResultSet subResultSet = value.getResultSet();
+                final StringBuilder buf = new StringBuilder();
+                for (int i = 0; i < subResultSet.getMetaData().getColumnCount(); i++) {
+                    buf.append(subResultSet.getString(i + 1)).append(' ');
+                }
+                return buf.toString().trim();
+            } else if (obj == null) {
+                return StringUtil.EMPTY;
+            }
+            return obj.toString();
         }
 
         @Override
