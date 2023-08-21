@@ -103,6 +103,10 @@ public class DatabaseDataStore extends AbstractDataStore {
     protected Integer getFetchSize(final DataStoreParams paramMap) {
         final String value = paramMap.getAsString(FETCH_SIZE_PARAM);
         if (StringUtil.isNotBlank(value)) {
+            if ("MIN_VALUE".equals(value)) {
+                return Integer.MIN_VALUE;
+            }
+
             try {
                 return Integer.parseInt(value);
             } catch (final NumberFormatException e) {
@@ -141,7 +145,7 @@ public class DatabaseDataStore extends AbstractDataStore {
             if (logger.isDebugEnabled()) {
                 logger.debug("sql: {}, fetch_size: {}", sql, fetchSize);
             }
-            stmt = con.createStatement();
+            stmt = con.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY);
             if (fetchSize != null) {
                 stmt.setFetchSize(fetchSize);
             }
