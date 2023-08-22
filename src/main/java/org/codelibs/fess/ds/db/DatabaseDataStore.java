@@ -37,7 +37,6 @@ import java.util.Properties;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
-import org.codelibs.core.io.InputStreamUtil;
 import org.codelibs.core.io.ReaderUtil;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.Constants;
@@ -317,7 +316,7 @@ public class DatabaseDataStore extends AbstractDataStore {
             final Object obj = resultSet.getObject(columnIndex);
             if (obj instanceof final Blob value) {
                 try (final InputStream in = value.getBinaryStream()) {
-                    return new String(InputStreamUtil.getBytes(in), StandardCharsets.UTF_8);
+                    return ComponentUtil.getExtractorFactory().builder(in, null).extract().getContent();
                 }
             }
             if (obj instanceof final byte[] value) {
@@ -334,7 +333,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                 return value.getObject().toString();
             } else if (obj instanceof final InputStream value) {
                 try {
-                    return new String(InputStreamUtil.getBytes(value), StandardCharsets.UTF_8);
+                    return ComponentUtil.getExtractorFactory().builder(value, null).extract().getContent();
                 } finally {
                     IOUtils.closeQuietly(value);
                 }
