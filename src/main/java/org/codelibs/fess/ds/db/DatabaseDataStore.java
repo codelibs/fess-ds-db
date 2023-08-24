@@ -43,6 +43,7 @@ import org.codelibs.fess.Constants;
 import org.codelibs.fess.app.service.FailureUrlService;
 import org.codelibs.fess.crawler.exception.CrawlingAccessException;
 import org.codelibs.fess.crawler.exception.MultipleCrawlingAccessException;
+import org.codelibs.fess.crawler.extractor.ExtractorBuilder;
 import org.codelibs.fess.ds.AbstractDataStore;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
 import org.codelibs.fess.entity.DataStoreParams;
@@ -53,6 +54,7 @@ import org.codelibs.fess.exception.FessSystemException;
 import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
+import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,7 +74,11 @@ public class DatabaseDataStore extends AbstractDataStore {
 
     private static final String FETCH_SIZE_PARAM = "fetch_size";
 
+    private static final String DEFAULT_MIMETYPE = "default_mimetype";
+
     private static final String INFO_PREFIX = "info.";
+
+    private static final String COLUMN_LABEL_PREFIX = "column_label.";
 
     @Override
     protected String getName() {
@@ -316,7 +322,18 @@ public class DatabaseDataStore extends AbstractDataStore {
             final Object obj = resultSet.getObject(columnIndex);
             if (obj instanceof final Blob value) {
                 try (final InputStream in = value.getBinaryStream()) {
-                    return ComponentUtil.getExtractorFactory().builder(in, null).extract().getContent();
+                    final FessConfig fessConfig = ComponentUtil.getFessConfig();
+                    final ExtractorBuilder builder = ComponentUtil.getExtractorFactory().builder(in, null);
+                    if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldMimetype()) instanceof final String mimetypeField
+                            && paramMap.get(mimetypeField) instanceof final String mimetype) {
+                        builder.mimeType(mimetype);
+                    } else if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldFilename()) instanceof final String filenameField
+                            && paramMap.get(filenameField) instanceof final String filename) {
+                        builder.filename(filename);
+                    } else if (paramMap.get(DEFAULT_MIMETYPE) instanceof final String defaultMimetype) {
+                        builder.mimeType(defaultMimetype);
+                    }
+                    return builder.extract().getContent();
                 }
             }
             if (obj instanceof final byte[] value) {
@@ -333,7 +350,18 @@ public class DatabaseDataStore extends AbstractDataStore {
                 return value.getObject().toString();
             } else if (obj instanceof final InputStream value) {
                 try {
-                    return ComponentUtil.getExtractorFactory().builder(value, null).extract().getContent();
+                    final FessConfig fessConfig = ComponentUtil.getFessConfig();
+                    final ExtractorBuilder builder = ComponentUtil.getExtractorFactory().builder(value, null);
+                    if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldMimetype()) instanceof final String mimetypeField
+                            && paramMap.get(mimetypeField) instanceof final String mimetype) {
+                        builder.mimeType(mimetype);
+                    } else if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldFilename()) instanceof final String filenameField
+                            && paramMap.get(filenameField) instanceof final String filename) {
+                        builder.filename(filename);
+                    } else if (paramMap.get(DEFAULT_MIMETYPE) instanceof final String defaultMimetype) {
+                        builder.mimeType(defaultMimetype);
+                    }
+                    return builder.extract().getContent();
                 } finally {
                     IOUtils.closeQuietly(value);
                 }
