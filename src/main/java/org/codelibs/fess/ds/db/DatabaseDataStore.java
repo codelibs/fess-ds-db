@@ -285,7 +285,12 @@ public class DatabaseDataStore extends AbstractDataStore {
 
         for (final String key : paramMap.asMap().keySet()) {
             if (key.startsWith(INFO_PREFIX)) {
-                info.put(key.substring(INFO_PREFIX.length()), paramMap.get(key));
+                final String k = key.substring(INFO_PREFIX.length());
+                final Object v = paramMap.get(key);
+                if (logger.isDebugEnabled()) {
+                    logger.debug("jdbc: info: {}={}", k, v);
+                }
+                info.put(k, v);
             }
         }
 
