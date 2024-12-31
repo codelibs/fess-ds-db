@@ -37,6 +37,8 @@ import java.util.Properties;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.io.ReaderUtil;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.Constants;
@@ -56,11 +58,9 @@ import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
 import org.codelibs.fess.util.ComponentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class DatabaseDataStore extends AbstractDataStore {
-    private static final Logger logger = LoggerFactory.getLogger(DatabaseDataStore.class);
+    private static final Logger logger = LogManager.getLogger(DatabaseDataStore.class);
 
     private static final String SQL_PARAM = "sql";
 
