@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2023 CodeLibs Project and the Others.
+ * Copyright 2012-2025 CodeLibs Project and the Others.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@ import java.util.Properties;
 import java.util.Set;
 
 import org.apache.commons.io.IOUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.codelibs.core.io.ReaderUtil;
 import org.codelibs.core.lang.StringUtil;
 import org.codelibs.fess.Constants;
@@ -47,7 +49,6 @@ import org.codelibs.fess.crawler.extractor.ExtractorBuilder;
 import org.codelibs.fess.ds.AbstractDataStore;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
 import org.codelibs.fess.entity.DataStoreParams;
-import org.codelibs.fess.es.config.exentity.DataConfig;
 import org.codelibs.fess.exception.DataStoreCrawlingException;
 import org.codelibs.fess.exception.DataStoreException;
 import org.codelibs.fess.exception.FessSystemException;
@@ -55,12 +56,24 @@ import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
+import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
+/**
+ * Database Data Store implementation for Fess.
+ * This data store enables crawling and indexing data from database sources via JDBC connections.
+ * It supports various database types and column data types including BLOBs, CLOBs, and binary data
+ * with automatic content extraction for search indexing.
+ */
 public class DatabaseDataStore extends AbstractDataStore {
-    private static final Logger logger = LoggerFactory.getLogger(DatabaseDataStore.class);
+    private static final Logger logger = LogManager.getLogger(DatabaseDataStore.class);
+
+    /**
+     * Default constructor.
+     */
+    public DatabaseDataStore() {
+        super();
+    }
 
     private static final String SQL_PARAM = "sql";
 
@@ -85,6 +98,13 @@ public class DatabaseDataStore extends AbstractDataStore {
         return this.getClass().getSimpleName();
     }
 
+    /**
+     * Retrieves the JDBC driver class name from the parameter map.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the JDBC driver class name
+     * @throws DataStoreException if the driver parameter is null, empty, or blank
+     */
     protected String getDriverClass(final DataStoreParams paramMap) {
         final String driverName = paramMap.getAsString(DRIVER_PARAM);
         if (StringUtil.isBlank(driverName)) {
@@ -93,18 +113,43 @@ public class DatabaseDataStore extends AbstractDataStore {
         return driverName;
     }
 
+    /**
+     * Retrieves the database username from the parameter map.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the database username, or null if not specified
+     */
     protected String getUsername(final DataStoreParams paramMap) {
         return paramMap.getAsString(USERNAME_PARAM);
     }
 
+    /**
+     * Retrieves the database password from the parameter map.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the database password, or null if not specified
+     */
     protected String getPassword(final DataStoreParams paramMap) {
         return paramMap.getAsString(PASSWORD_PARAM);
     }
 
+    /**
+     * Retrieves the database URL from the parameter map.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the database URL, or null if not specified
+     */
     protected String getUrl(final DataStoreParams paramMap) {
         return paramMap.getAsString(URL_PARAM);
     }
 
+    /**
+     * Retrieves the fetch size from the parameter map.
+     * Supports numeric values and special "MIN_VALUE" string that maps to Integer.MIN_VALUE.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the fetch size as Integer, or null if not specified or invalid
+     */
     protected Integer getFetchSize(final DataStoreParams paramMap) {
         final String value = paramMap.getAsString(FETCH_SIZE_PARAM);
         if (StringUtil.isNotBlank(value)) {
@@ -121,6 +166,13 @@ public class DatabaseDataStore extends AbstractDataStore {
         return null;
     }
 
+    /**
+     * Retrieves the SQL query from the parameter map.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the SQL query string
+     * @throws DataStoreException if the SQL parameter is null, empty, or blank
+     */
     protected String getSql(final DataStoreParams paramMap) {
         final String sql = paramMap.getAsString(SQL_PARAM);
         if (StringUtil.isBlank(sql)) {
@@ -265,6 +317,14 @@ public class DatabaseDataStore extends AbstractDataStore {
         }
     }
 
+    /**
+     * Creates a database connection using the parameters specified in the parameter map.
+     * Supports connection properties with "info." prefix for additional JDBC connection properties.
+     *
+     * @param paramMap the parameter map containing database connection configuration
+     * @return a database connection
+     * @throws SQLException if a database access error occurs
+     */
     protected Connection getConnection(final DataStoreParams paramMap) throws SQLException {
         final String jdbcUrl = getUrl(paramMap);
 
@@ -297,9 +357,22 @@ public class DatabaseDataStore extends AbstractDataStore {
         return DriverManager.getConnection(jdbcUrl, info);
     }
 
+    /**
+     * A Map implementation that wraps ResultSet data for script processing.
+     * This class provides access to database column values and metadata, making them available
+     * for script evaluation during the data extraction process.
+     */
     protected static class ResultSetParamMap implements Map<String, Object> {
         private final Map<String, Object> paramMap = new HashMap<>();
 
+        /**
+         * Constructor that initializes the parameter map with ResultSet data.
+         *
+         * @param config the data configuration
+         * @param crawlingContext the crawling context
+         * @param resultSet the database result set
+         * @param paramMap the data store parameters
+         */
         public ResultSetParamMap(final DataConfig config, final Map<String, Object> crawlingContext, final ResultSet resultSet,
                 final DataStoreParams paramMap) {
             this.paramMap.putAll(paramMap.asMap());
@@ -323,6 +396,16 @@ public class DatabaseDataStore extends AbstractDataStore {
             }
         }
 
+        /**
+         * Extracts and converts a column value from the ResultSet to a String.
+         * Handles various data types including BLOBs, CLOBs, binary data, and arrays.
+         *
+         * @param resultSet the database result set
+         * @param columnIndex the column index (1-based)
+         * @return the column value as a String
+         * @throws IOException if an I/O error occurs during data extraction
+         * @throws SQLException if a database access error occurs
+         */
         protected String getColumnValue(final ResultSet resultSet, final int columnIndex) throws IOException, SQLException {
             final Object obj = resultSet.getObject(columnIndex);
             if (obj instanceof final Blob value) {
