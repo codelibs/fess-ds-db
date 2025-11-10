@@ -592,10 +592,10 @@ public class DatabaseDataStoreTest extends ContainerTestCase {
         paramMap.put("password", "");
         assertEquals("", dataStore.getPassword(paramMap));
 
-        // Clear and test null
+        // Clear and test - getAsString returns empty string when key doesn't exist
         paramMap.asMap().clear();
-        assertNull(dataStore.getUsername(paramMap));
-        assertNull(dataStore.getPassword(paramMap));
+        assertEquals("", dataStore.getUsername(paramMap));
+        assertEquals("", dataStore.getPassword(paramMap));
     }
 
     /**
@@ -695,19 +695,17 @@ public class DatabaseDataStoreTest extends ContainerTestCase {
     }
 
     /**
-     * Test driver class parameter with trailing/leading spaces (should fail)
+     * Test driver class parameter with trailing/leading spaces
+     * Note: StringUtil.isBlank only checks for blank strings (null, empty, or whitespace-only),
+     * not strings with leading/trailing spaces around non-whitespace content.
      */
     public void test_getDriverClass_withSurroundingSpaces() {
         final DataStoreParams paramMap = new DataStoreParams();
 
-        // Driver name with spaces should be treated as blank and throw exception
+        // Driver name with surrounding spaces is accepted (not treated as blank)
         paramMap.put("driver", "  org.h2.Driver  ");
-        try {
-            dataStore.getDriverClass(paramMap);
-            fail("Should throw DataStoreException for driver with surrounding spaces");
-        } catch (final DataStoreException e) {
-            assertEquals("JDBC driver is null", e.getMessage());
-        }
+        final String result = dataStore.getDriverClass(paramMap);
+        assertEquals("  org.h2.Driver  ", result);
     }
 
     /**
