@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.db;
 
+import org.junit.jupiter.api.TestInfo;
+
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.HashMap;
@@ -24,9 +26,9 @@ import java.util.Properties;
 import org.codelibs.fess.entity.DataStoreParams;
 import org.codelibs.fess.exception.DataStoreException;
 import org.codelibs.fess.util.ComponentUtil;
-import org.dbflute.utflute.lastadi.ContainerTestCase;
+import org.codelibs.fess.ds.db.UnitDsTestCase;
 
-public class DatabaseDataStoreTest extends ContainerTestCase {
+public class DatabaseDataStoreTest extends UnitDsTestCase {
     public DatabaseDataStore dataStore;
 
     @Override
@@ -40,15 +42,15 @@ public class DatabaseDataStoreTest extends ContainerTestCase {
     }
 
     @Override
-    public void setUp() throws Exception {
-        super.setUp();
+    public void setUp(TestInfo testInfo) throws Exception {
+        super.setUp(testInfo);
         dataStore = new DatabaseDataStore();
     }
 
     @Override
-    public void tearDown() throws Exception {
+    public void tearDown(TestInfo testInfo) throws Exception {
         ComponentUtil.setFessConfig(null);
-        super.tearDown();
+        super.tearDown(testInfo);
     }
 
     public void test_getDriverClass_validDriver() {
@@ -475,8 +477,7 @@ public class DatabaseDataStoreTest extends ContainerTestCase {
      */
     public void test_getSql_withMultilineQuery() {
         final DataStoreParams paramMap = new DataStoreParams();
-        final String multilineSql = "SELECT id, name, email\n" + "FROM users\n" + "WHERE created_at > '2023-01-01'\n"
-                + "ORDER BY id DESC";
+        final String multilineSql = "SELECT id, name, email\n" + "FROM users\n" + "WHERE created_at > '2023-01-01'\n" + "ORDER BY id DESC";
         paramMap.put("sql", multilineSql);
 
         final String result = dataStore.getSql(paramMap);
