@@ -134,6 +134,28 @@ public class PostgreSqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
     }
 
     /**
+     * A query that outlives the timeout is cut short. Without one, the crawler
+     * thread waits inside the driver indefinitely: the data store only checks
+     * whether it should stop between rows, so stopping the job cannot interrupt
+     * a blocked call.
+     */
+    @Test
+    public void test_queryTimeoutBoundsALongRunningQuery() throws Exception {
+        final DataStoreParams paramMap = params("SELECT pg_sleep(10) AS slept");
+        paramMap.put("query_timeout", "1");
+
+        final long startedAt = System.currentTimeMillis();
+        try {
+            runStoreData(paramMap, scripts("url", "slept"));
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            assertEquals("Failed to execute the query.", e.getMessage());
+        }
+        final long elapsed = System.currentTimeMillis() - startedAt;
+        assertTrue("took " + elapsed + "ms", elapsed < 10_000L);
+    }
+
+    /**
      * {@code fetch_size=MIN_VALUE} is a MySQL idiom, and PostgreSQL rejects the
      * negative value. It used to end the crawl having indexed nothing; the
      * rejection is now reported and the crawl runs with the driver default. A
