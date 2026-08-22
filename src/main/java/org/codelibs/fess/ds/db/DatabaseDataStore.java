@@ -30,8 +30,10 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -62,6 +64,7 @@ import org.codelibs.fess.helper.CrawlerStatsHelper;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsAction;
 import org.codelibs.fess.helper.CrawlerStatsHelper.StatsKeyObject;
 import org.codelibs.fess.mylasta.direction.FessConfig;
+import org.codelibs.fess.opensearch.config.exbhv.DataConfigBhv;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.util.ComponentUtil;
 
@@ -94,6 +97,28 @@ public class DatabaseDataStore extends AbstractDataStore {
     private static final String FETCH_SIZE_PARAM = "fetch_size";
 
     private static final String QUERY_TIMEOUT_PARAM = "query_timeout";
+
+    private static final String LAST_CRAWL_TIME_PARAM = "last_crawl_time";
+
+    private static final String LAST_CRAWL_TIME_FORMAT_PARAM = "last_crawl_time_format";
+
+    /** The placeholder an incremental query puts where the previous crawl time belongs. */
+    protected static final String LAST_CRAWL_TIME_PLACEHOLDER = "${" + LAST_CRAWL_TIME_PARAM + "}";
+
+    private static final String DEFAULT_LAST_CRAWL_TIME_FORMAT = "yyyy-MM-dd HH:mm:ss";
+
+    /** The value substituted on the first run, so that it selects everything. */
+    private static final String EPOCH = "1970-01-01 00:00:00";
+
+    /** Read by DataIndexHelper after the crawl to decide whether to delete stale documents. */
+    private static final String DELETE_OLD_DOCS_PARAM = "delete_old_docs";
+
+    /**
+     * What a formatted timestamp is allowed to contain before it is spliced into the
+     * query. The format string is administrator supplied, and a quote in it would
+     * change the shape of the statement rather than the value in it.
+     */
+    private static final Pattern SAFE_TIMESTAMP_PATTERN = Pattern.compile("[0-9\\-:./ TZ+]+");
 
     /** Requests the MySQL row-by-row streaming mode. */
     private static final String MIN_VALUE_PARAM_VALUE = "MIN_VALUE";
@@ -300,12 +325,141 @@ public class DatabaseDataStore extends AbstractDataStore {
         return buf.toString();
     }
 
+    /**
+     * {@inheritDoc}
+     *
+     * <p>
+     * An incremental query returns only the rows that changed, so the documents
+     * that did not change keep the segment of an earlier crawl. {@code DataIndexHelper}
+     * deletes exactly those once the crawl finishes, which would empty the index on
+     * every run. Turn that off before the crawl starts when the query is incremental.
+     * An explicit {@code delete_old_docs} in the data configuration still wins, because
+     * the configured parameters are merged over this one.
+     * </p>
+     */
+    @Override
+    public void store(final DataConfig config, final IndexUpdateCallback callback, final DataStoreParams initParamMap) {
+        if (isIncremental(config)) {
+            if (logger.isDebugEnabled()) {
+                logger.debug("Incremental crawl: not deleting documents left by earlier crawls.");
+            }
+            initParamMap.put(DELETE_OLD_DOCS_PARAM, Constants.FALSE);
+        }
+        super.store(config, callback, initParamMap);
+    }
+
+    /**
+     * Whether the configured query asks for the previous crawl time.
+     *
+     * <p>
+     * The raw handler parameter is read rather than the parsed map, because this
+     * runs before {@code AbstractDataStore#store} merges the configuration in.
+     * </p>
+     *
+     * @param config the data configuration
+     * @return true if the query contains the last crawl time placeholder
+     */
+    protected boolean isIncremental(final DataConfig config) {
+        final String handlerParameter = config.getHandlerParameter();
+        return handlerParameter != null && handlerParameter.contains(LAST_CRAWL_TIME_PLACEHOLDER);
+    }
+
+    /**
+     * Replaces the last crawl time placeholder in the query.
+     *
+     * <p>
+     * The value is the moment the previous crawl started, or the epoch on the first
+     * run so that everything is selected. It is formatted with
+     * {@code last_crawl_time_format}, which has to produce something a timestamp
+     * literal accepts in the database being queried.
+     * </p>
+     *
+     * @param paramMap the parameter map containing configuration
+     * @param sql the configured query
+     * @return the query with the placeholder replaced
+     */
+    protected String resolveLastCrawlTime(final DataStoreParams paramMap, final String sql) {
+        if (!sql.contains(LAST_CRAWL_TIME_PLACEHOLDER)) {
+            return sql;
+        }
+        final String lastCrawlTime = paramMap.getAsString(LAST_CRAWL_TIME_PARAM, EPOCH).trim();
+        if (!SAFE_TIMESTAMP_PATTERN.matcher(lastCrawlTime).matches()) {
+            throw new DataStoreException(
+                    "The stored " + LAST_CRAWL_TIME_PARAM + " is not a timestamp and will not be put into the query: " + lastCrawlTime);
+        }
+        if (logger.isDebugEnabled()) {
+            logger.debug("Incremental crawl from {}.", lastCrawlTime);
+        }
+        return sql.replace(LAST_CRAWL_TIME_PLACEHOLDER, lastCrawlTime);
+    }
+
+    /**
+     * Formats the moment this crawl started, for the next run to select from.
+     *
+     * @param paramMap the parameter map containing configuration
+     * @param startedAt the time the crawl started
+     * @return the formatted timestamp
+     */
+    protected String formatCrawlTime(final DataStoreParams paramMap, final long startedAt) {
+        final String format = paramMap.getAsString(LAST_CRAWL_TIME_FORMAT_PARAM, DEFAULT_LAST_CRAWL_TIME_FORMAT);
+        return new SimpleDateFormat(format).format(new Date(startedAt));
+    }
+
+    /**
+     * Stores the crawl time so the next run can select from it.
+     *
+     * <p>
+     * The raw handler parameter string is edited line by line rather than rebuilt
+     * from the parsed map: that map has already been decrypted, so rebuilding it
+     * would rewrite {@code password={cipher}...} in cleartext.
+     * </p>
+     *
+     * @param config the data configuration
+     * @param crawlTime the formatted crawl time
+     */
+    protected void storeLastCrawlTime(final DataConfig config, final String crawlTime) {
+        final StringBuilder buf = new StringBuilder();
+        boolean replaced = false;
+        final String handlerParameter = config.getHandlerParameter();
+        if (handlerParameter != null) {
+            for (final String line : handlerParameter.split("[\r\n]")) {
+                if (StringUtil.isBlank(line)) {
+                    continue;
+                }
+                if (buf.length() > 0) {
+                    buf.append('\n');
+                }
+                final int pos = line.indexOf('=');
+                if (LAST_CRAWL_TIME_PARAM.equals((pos >= 0 ? line.substring(0, pos) : line).trim())) {
+                    buf.append(LAST_CRAWL_TIME_PARAM).append('=').append(crawlTime);
+                    replaced = true;
+                } else {
+                    // Preserved verbatim, so an encrypted value keeps its stored form.
+                    buf.append(line);
+                }
+            }
+        }
+        if (!replaced) {
+            if (buf.length() > 0) {
+                buf.append('\n');
+            }
+            buf.append(LAST_CRAWL_TIME_PARAM).append('=').append(crawlTime);
+        }
+        config.setHandlerParameter(buf.toString());
+        // Never log the parameter string itself: it carries the connection settings.
+        logger.info("Updated {} of {} to {}.", LAST_CRAWL_TIME_PARAM, config.getId(), crawlTime);
+        ComponentUtil.getComponent(DataConfigBhv.class).update(config);
+    }
+
     @Override
     protected void storeData(final DataConfig config, final IndexUpdateCallback callback, final DataStoreParams paramMap,
             final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
 
         final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
         final FessConfig fessConfig = ComponentUtil.getFessConfig();
+        // Taken before the query runs: a row written while the crawl is in progress must
+        // be picked up by the next run rather than fall between the two.
+        final long startedAt = ComponentUtil.getSystemHelper().getCurrentTimeAsLong();
         final long readInterval = getReadInterval(paramMap);
         final String scriptType = getScriptType(paramMap);
 
@@ -327,7 +481,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                 throw new DataStoreException("Failed to connect to " + maskUrl(getUrl(paramMap)) + ".", e);
             }
 
-            final String sql = getSql(paramMap);
+            final String sql = resolveLastCrawlTime(paramMap, getSql(paramMap));
             final Integer fetchSize = getFetchSize(paramMap);
             final Integer queryTimeout = getQueryTimeout(paramMap);
             if (logger.isDebugEnabled()) {
@@ -445,6 +599,12 @@ public class DatabaseDataStore extends AbstractDataStore {
                 if (readInterval > 0) {
                     sleep(readInterval);
                 }
+            }
+
+            if (loop && alive && isIncremental(config)) {
+                // Only after the whole result set was consumed. Stopping early and then
+                // moving the watermark forward would skip everything that was not reached.
+                storeLastCrawlTime(config, formatCrawlTime(paramMap, startedAt));
             }
         } catch (final DataStoreException e) {
             // Already carries a message that says what went wrong. Relabelling it as a
