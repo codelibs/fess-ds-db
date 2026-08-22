@@ -82,7 +82,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
             dataStore.getDriverClass(paramMap);
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("JDBC driver is null", e.getMessage());
+            assertEquals("The driver parameter is required.", e.getMessage());
         }
     }
 
@@ -95,7 +95,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
             dataStore.getDriverClass(paramMap);
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("JDBC driver is null", e.getMessage());
+            assertEquals("The driver parameter is required.", e.getMessage());
         }
     }
 
@@ -108,7 +108,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
             dataStore.getDriverClass(paramMap);
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("JDBC driver is null", e.getMessage());
+            assertEquals("The driver parameter is required.", e.getMessage());
         }
     }
 
@@ -129,7 +129,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
             dataStore.getSql(paramMap);
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("sql is null", e.getMessage());
+            assertEquals("The sql parameter is required.", e.getMessage());
         }
     }
 
@@ -142,7 +142,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
             dataStore.getSql(paramMap);
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("sql is null", e.getMessage());
+            assertEquals("The sql parameter is required.", e.getMessage());
         }
     }
 
@@ -155,7 +155,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
             dataStore.getSql(paramMap);
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("sql is null", e.getMessage());
+            assertEquals("The sql parameter is required.", e.getMessage());
         }
     }
 
@@ -224,8 +224,12 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     public void test_getUrl_nullUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
 
-        final String result = dataStore.getUrl(paramMap);
-        assertNull(result);
+        try {
+            dataStore.getUrl(paramMap);
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            assertEquals("The url parameter is required.", e.getMessage());
+        }
     }
 
     @Test
@@ -233,8 +237,12 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "");
 
-        final String result = dataStore.getUrl(paramMap);
-        assertEquals("", result);
+        try {
+            dataStore.getUrl(paramMap);
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            assertEquals("The url parameter is required.", e.getMessage());
+        }
     }
 
     @Test
@@ -328,6 +336,34 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     }
 
     @Test
+    public void test_maskUrl_hidesUserInfo() {
+        assertEquals("jdbc:mysql://****:****@db.example.com:3306/app",
+                DatabaseDataStore.maskUrl("jdbc:mysql://scott:tiger@db.example.com:3306/app"));
+    }
+
+    @Test
+    public void test_maskUrl_hidesSensitiveQueryParameters() {
+        // The user name is worth keeping in a log; the password is not.
+        assertEquals("jdbc:mysql://db.example.com/app?user=scott&password=****&useSSL=true",
+                DatabaseDataStore.maskUrl("jdbc:mysql://db.example.com/app?user=scott&password=tiger&useSSL=true"));
+    }
+
+    @Test
+    public void test_maskUrl_leavesAnOrdinaryUrlAlone() {
+        assertEquals("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1", DatabaseDataStore.maskUrl("jdbc:h2:mem:test;DB_CLOSE_DELAY=-1"));
+        assertNull(DatabaseDataStore.maskUrl(null));
+    }
+
+    @Test
+    public void test_isSensitiveName_followsTheEncryptedPropertyPattern() {
+        assertTrue(DatabaseDataStore.isSensitiveName("password"));
+        assertTrue(DatabaseDataStore.isSensitiveName("info.password"));
+        assertTrue(DatabaseDataStore.isSensitiveName("api_token"));
+        assertFalse(DatabaseDataStore.isSensitiveName("username"));
+        assertFalse(DatabaseDataStore.isSensitiveName("url"));
+    }
+
+    @Test
     public void test_getName() {
         final String result = dataStore.getName();
         assertEquals("DatabaseDataStore", result);
@@ -379,22 +415,23 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     }
 
     @Test
-    public void test_getConnection_nullUrl() {
+    public void test_getConnection_nullUrl() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("username", "testuser");
         paramMap.put("password", "testpass");
 
+        // A missing URL is a configuration mistake, reported as such rather than left
+        // to the driver to turn into "No suitable driver" or a NullPointerException.
         try {
             dataStore.getConnection(paramMap);
-            fail("Should throw SQLException");
-        } catch (final SQLException e) {
-            // Expected - null URL should cause SQLException
-            assertNotNull(e);
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            assertEquals("The url parameter is required.", e.getMessage());
         }
     }
 
     @Test
-    public void test_getConnection_emptyUrl() {
+    public void test_getConnection_emptyUrl() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "");
         paramMap.put("username", "testuser");
@@ -402,10 +439,9 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
 
         try {
             dataStore.getConnection(paramMap);
-            fail("Should throw SQLException");
-        } catch (final SQLException e) {
-            // Expected - empty URL should cause SQLException
-            assertNotNull(e);
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            assertEquals("The url parameter is required.", e.getMessage());
         }
     }
 
@@ -758,9 +794,14 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         paramMap.put("password", " \t \n ");
         assertEquals(" \t \n ", dataStore.getPassword(paramMap));
 
-        // URL with whitespace only - should return as-is
+        // A whitespace-only URL is not a URL, so it is rejected like a missing one.
         paramMap.put("url", "   ");
-        assertEquals("   ", dataStore.getUrl(paramMap));
+        try {
+            dataStore.getUrl(paramMap);
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            assertEquals("The url parameter is required.", e.getMessage());
+        }
     }
 
     /**
@@ -848,9 +889,11 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         paramMap.put("driver", "org.h2.Driver");
         paramMap.put("sql", "SELECT 1");
 
+        paramMap.put("url", "jdbc:h2:mem:minimal");
+
         assertEquals("org.h2.Driver", dataStore.getDriverClass(paramMap));
         assertEquals("SELECT 1", dataStore.getSql(paramMap));
-        assertNull(dataStore.getUrl(paramMap));
+        assertEquals("jdbc:h2:mem:minimal", dataStore.getUrl(paramMap));
         assertNull(dataStore.getUsername(paramMap));
         assertNull(dataStore.getPassword(paramMap));
         assertNull(dataStore.getFetchSize(paramMap));

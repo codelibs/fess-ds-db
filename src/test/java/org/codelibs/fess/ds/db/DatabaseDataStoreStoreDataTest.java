@@ -255,6 +255,30 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
         assertEquals("https://example.com/1", docs.get(0).get("url"));
     }
 
+    @Test
+    public void test_resultSetParamMap_toStringMasksCredentials() throws Exception {
+        execute("CREATE TABLE doc (id INT PRIMARY KEY)");
+        execute("INSERT INTO doc VALUES (1)");
+
+        final DataStoreParams paramMap = params("SELECT id FROM doc");
+        paramMap.put("password", "s3cr3t");
+        paramMap.put("info.password", "s3cr3t-too");
+
+        try (Connection con = connect();
+                java.sql.Statement stmt = con.createStatement();
+                java.sql.ResultSet rs = stmt.executeQuery("SELECT id FROM doc")) {
+            assertTrue(rs.next());
+            // storeData logs this map once per row at DEBUG, so it must not carry secrets.
+            final String rendered = new DatabaseDataStore.ResultSetParamMap(newConfig(), new HashMap<>(), rs, paramMap).toString();
+            assertFalse(rendered, rendered.contains("s3cr3t"));
+            assertTrue(rendered, rendered.contains("password=****"));
+            assertTrue(rendered, rendered.contains("info.password=****"));
+            // Everything else stays readable, or the log would be useless.
+            assertTrue(rendered, rendered.contains("ID=1"));
+            assertTrue(rendered, rendered.contains("driver=org.h2.Driver"));
+        }
+    }
+
     // ------------------------------------------------------------------
     // failures
     // ------------------------------------------------------------------
@@ -326,12 +350,12 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
     }
 
     /**
-     * Pins current behaviour: every setup failure, whatever its cause, surfaces
-     * as the same message. A missing driver and a malformed query are
-     * indistinguishable to an administrator reading the log.
+     * Setup failures say what failed. Every one of them used to surface as
+     * "Failed to crawl data in DB.", which left a missing driver and a malformed
+     * query indistinguishable to whoever reads the log.
      */
     @Test
-    public void test_storeData_missingDriverIsReportedWithTheGenericMessage() {
+    public void test_storeData_missingDriverNamesTheDriverAndWhereToPutIt() {
         final DataStoreParams paramMap = params("SELECT 1");
         paramMap.put("driver", "no.such.Driver");
 
@@ -340,13 +364,14 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
                     new HashMap<>());
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("Failed to crawl data in DB.", e.getMessage());
+            assertTrue(e.getMessage(), e.getMessage().contains("no.such.Driver"));
+            assertTrue(e.getMessage(), e.getMessage().contains("WEB-INF/env/crawler/lib"));
             assertTrue(e.getCause().getClass().getName(), e.getCause() instanceof ClassNotFoundException);
         }
     }
 
     @Test
-    public void test_storeData_invalidSqlIsReportedWithTheGenericMessage() throws Exception {
+    public void test_storeData_invalidSqlIsReportedAsAQueryFailure() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY)");
 
         try {
@@ -354,7 +379,23 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
                     scripts("url", "ID"), new HashMap<>());
             fail("Should throw DataStoreException");
         } catch (final DataStoreException e) {
-            assertEquals("Failed to crawl data in DB.", e.getMessage());
+            assertEquals("Failed to execute the query.", e.getMessage());
+        }
+    }
+
+    @Test
+    public void test_storeData_missingSqlIsReportedAsAMissingParameter() throws Exception {
+        final DataStoreParams paramMap = params("SELECT 1");
+        paramMap.put("sql", "");
+
+        try {
+            dataStore.storeData(newConfig(), new CapturingCallback(new ArrayList<>(), dataMap -> false), paramMap, scripts("url", "ID"),
+                    new HashMap<>());
+            fail("Should throw DataStoreException");
+        } catch (final DataStoreException e) {
+            // This used to be relabelled "Failed to crawl data in DB.", hiding the fact
+            // that the configuration itself was incomplete.
+            assertEquals("The sql parameter is required.", e.getMessage());
         }
     }
 
