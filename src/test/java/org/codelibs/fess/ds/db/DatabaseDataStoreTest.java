@@ -30,7 +30,18 @@ import org.codelibs.fess.util.ComponentUtil;
 import org.codelibs.fess.ds.db.UnitDsTestCase;
 
 public class DatabaseDataStoreTest extends UnitDsTestCase {
+    private static final java.util.concurrent.atomic.AtomicInteger DB_SEQ = new java.util.concurrent.atomic.AtomicInteger();
+
     public DatabaseDataStore dataStore;
+
+    /**
+     * A fresh in-memory database name per call. H2 fixes the credentials on the
+     * connection that creates the database, so sharing one name across tests
+     * makes them depend on execution order.
+     */
+    private String newJdbcUrl() {
+        return "jdbc:h2:mem:conn" + DB_SEQ.incrementAndGet();
+    }
 
     @Override
     protected String prepareConfigFile() {
@@ -336,21 +347,33 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     }
 
     @Test
-    public void test_getConnection_withInfoParameters() {
+    public void test_getConnection_passesInfoParametersToTheDriver() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();
-        paramMap.put("url", "jdbc:h2:mem:test");
+        paramMap.put("url", newJdbcUrl());
         paramMap.put("username", "testuser");
         paramMap.put("password", "testpass");
-        paramMap.put("info.useSSL", "false");
-        paramMap.put("info.timeout", "30");
+        // INIT is an H2 connection setting that runs SQL as the connection opens.
+        // Observing its effect is what proves the "info." prefixed parameters reach
+        // the driver rather than being dropped.
+        paramMap.put("info.INIT", "CREATE TABLE info_probe (id INT)");
 
-        // No JDBC driver is on the test classpath at this point, so the call must fail.
-        // Without the fail() below this test passes whether or not a connection is made.
-        try {
-            dataStore.getConnection(paramMap);
-            fail("Should throw SQLException because no JDBC driver is registered");
-        } catch (final SQLException e) {
-            assertTrue(e.getMessage(), e.getMessage().contains("No suitable driver"));
+        try (Connection conn = dataStore.getConnection(paramMap); java.sql.Statement stmt = conn.createStatement()) {
+            try (java.sql.ResultSet rs = stmt.executeQuery("SELECT COUNT(*) FROM info_probe")) {
+                assertTrue(rs.next());
+            }
+        }
+    }
+
+    @Test
+    public void test_getConnection_withCredentials() throws Exception {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("url", newJdbcUrl());
+        paramMap.put("username", "testuser");
+        paramMap.put("password", "testpass");
+
+        try (Connection conn = dataStore.getConnection(paramMap)) {
+            assertNotNull(conn);
+            assertTrue(conn.isValid(5));
         }
     }
 
@@ -386,16 +409,15 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     }
 
     @Test
-    public void test_getConnection_withoutCredentials() {
+    public void test_getConnection_withoutCredentials() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();
-        paramMap.put("url", "jdbc:h2:mem:test");
+        paramMap.put("url", newJdbcUrl());
 
-        // See test_getConnection_withInfoParameters: the call must fail without a driver.
-        try {
-            dataStore.getConnection(paramMap);
-            fail("Should throw SQLException because no JDBC driver is registered");
-        } catch (final SQLException e) {
-            assertTrue(e.getMessage(), e.getMessage().contains("No suitable driver"));
+        // Neither user nor password is put into the Properties, so the driver sees
+        // an empty credential set.
+        try (Connection conn = dataStore.getConnection(paramMap)) {
+            assertNotNull(conn);
+            assertTrue(conn.isValid(5));
         }
     }
 
@@ -861,18 +883,15 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
      * Test getConnection with username but no password
      */
     @Test
-    public void test_getConnection_usernameWithoutPassword() {
+    public void test_getConnection_usernameWithoutPassword() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();
-        paramMap.put("url", "jdbc:h2:mem:test");
+        paramMap.put("url", newJdbcUrl());
         paramMap.put("username", "testuser");
         // password is intentionally not set
 
-        try {
-            final Connection conn = dataStore.getConnection(paramMap);
+        try (Connection conn = dataStore.getConnection(paramMap)) {
             assertNotNull(conn);
-            conn.close();
-        } catch (final SQLException e) {
-            assertTrue(e.getMessage().contains("No suitable driver") || e.getMessage().contains("Driver not found"));
+            assertTrue(conn.isValid(5));
         }
     }
 
@@ -880,18 +899,15 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
      * Test getConnection with password but no username
      */
     @Test
-    public void test_getConnection_passwordWithoutUsername() {
+    public void test_getConnection_passwordWithoutUsername() throws Exception {
         final DataStoreParams paramMap = new DataStoreParams();
-        paramMap.put("url", "jdbc:h2:mem:test");
+        paramMap.put("url", newJdbcUrl());
         paramMap.put("password", "testpass");
         // username is intentionally not set
 
-        try {
-            final Connection conn = dataStore.getConnection(paramMap);
+        try (Connection conn = dataStore.getConnection(paramMap)) {
             assertNotNull(conn);
-            conn.close();
-        } catch (final SQLException e) {
-            assertTrue(e.getMessage().contains("No suitable driver") || e.getMessage().contains("Driver not found"));
+            assertTrue(conn.isValid(5));
         }
     }
 

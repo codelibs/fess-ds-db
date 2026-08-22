@@ -125,5 +125,15 @@
 			<version>${utflute.version}</version>
 			<scope>test</scope>
 		</dependency>
+		<!-- In-memory database used to drive storeData() and getColumnValue()
+		     over a real JDBC ResultSet. The version is declared here rather than
+		     in fess-parent because fess-parent has no dependencyManagement entry
+		     for it, so a property there would not reach this module. -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<version>2.4.240</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 </project>
