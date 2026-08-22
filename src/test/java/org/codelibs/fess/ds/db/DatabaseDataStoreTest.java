@@ -269,8 +269,9 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "-100");
 
-        final Integer result = dataStore.getFetchSize(paramMap);
-        assertEquals(Integer.valueOf(-100), result);
+        // Statement#setFetchSize rejects negative values, so passing one on would end
+        // the crawl. Only Integer.MIN_VALUE has a meaning, and it has its own test.
+        assertNull(dataStore.getFetchSize(paramMap));
     }
 
     @Test
@@ -483,10 +484,8 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "  100  ");
 
-        final Integer result = dataStore.getFetchSize(paramMap);
-        // StringUtil.isNotBlank considers strings with only whitespace as blank
-        // So this should return null, not parse the number
-        assertNull(result);
+        // Surrounding whitespace is trimmed, so a pasted value still works.
+        assertEquals(Integer.valueOf(100), dataStore.getFetchSize(paramMap));
     }
 
     @Test
@@ -612,10 +611,11 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     public void test_getFetchSize_boundaryValuesNearLimits() {
         final DataStoreParams paramMap = new DataStoreParams();
 
-        // Test with Integer.MIN_VALUE + 1
+        // Integer.MIN_VALUE + 1 is just a negative number: no driver assigns it a
+        // meaning, and setFetchSize would reject it.
         paramMap.put("fetch_size", String.valueOf(Integer.MIN_VALUE + 1));
         Integer result = dataStore.getFetchSize(paramMap);
-        assertEquals(Integer.valueOf(Integer.MIN_VALUE + 1), result);
+        assertNull(result);
 
         // Test with Integer.MAX_VALUE - 1
         paramMap.put("fetch_size", String.valueOf(Integer.MAX_VALUE - 1));

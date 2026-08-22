@@ -293,27 +293,22 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
     }
 
     /**
-     * Pins current behaviour: a negative fetch size reaches
-     * {@code Statement#setFetchSize}, which rejects it, and the whole crawl ends
-     * without indexing a single row.
+     * A negative fetch size used to reach {@code Statement#setFetchSize}, which
+     * rejects it, ending the crawl without indexing a single row. A tuning hint
+     * is now reported and ignored instead of costing the whole crawl.
      */
     @Test
-    public void test_storeData_negativeFetchSizeAbortsTheWholeCrawl() throws Exception {
+    public void test_storeData_negativeFetchSizeIsIgnored() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY)");
         execute("INSERT INTO doc VALUES (1), (2)");
 
         final DataStoreParams paramMap = params("SELECT id FROM doc");
         paramMap.put("fetch_size", "-100");
 
-        final List<Map<String, Object>> stored = new ArrayList<>();
-        try {
-            dataStore.storeData(newConfig(), new CapturingCallback(stored, dataMap -> false), paramMap, scripts("url", "ID"),
-                    new HashMap<>());
-            fail("Should throw DataStoreException");
-        } catch (final DataStoreException e) {
-            assertEquals("Failed to crawl data in DB.", e.getMessage());
-        }
-        assertTrue(stored.isEmpty());
+        final List<Map<String, Object>> docs = runStoreData(paramMap, scripts("url", "ID"));
+
+        assertNoRowFailure();
+        assertEquals(2, docs.size());
     }
 
     @Test
