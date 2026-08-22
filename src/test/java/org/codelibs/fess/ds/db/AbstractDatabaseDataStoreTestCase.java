@@ -68,7 +68,7 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
     public void setUp(final TestInfo testInfo) throws Exception {
         super.setUp(testInfo);
         dataStore = new DatabaseDataStore();
-        jdbcUrl = "jdbc:h2:mem:dsdb" + DB_SEQ.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+        jdbcUrl = newJdbcUrl();
 
         // storeData() records per-row statistics, which needs these two helpers.
         ComponentUtil.register(new SystemHelper(), "systemHelper");
@@ -90,13 +90,40 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
     }
 
     // ------------------------------------------------------------------
+    // the database under test - overridden by the container based subclasses
+    // ------------------------------------------------------------------
+
+    /** A fresh in-memory database per test, so credentials cannot leak between them. */
+    protected String newJdbcUrl() {
+        return "jdbc:h2:mem:dsdb" + DB_SEQ.incrementAndGet() + ";DB_CLOSE_DELAY=-1";
+    }
+
+    protected String driverClassName() {
+        return "org.h2.Driver";
+    }
+
+    protected String dbUsername() {
+        return null;
+    }
+
+    protected String dbPassword() {
+        return null;
+    }
+
+    // ------------------------------------------------------------------
     // fixture helpers
     // ------------------------------------------------------------------
 
     protected DataStoreParams params(final String sql) {
         final DataStoreParams paramMap = new DataStoreParams();
-        paramMap.put("driver", "org.h2.Driver");
+        paramMap.put("driver", driverClassName());
         paramMap.put("url", jdbcUrl);
+        if (dbUsername() != null) {
+            paramMap.put("username", dbUsername());
+        }
+        if (dbPassword() != null) {
+            paramMap.put("password", dbPassword());
+        }
         paramMap.put("sql", sql);
         return paramMap;
     }
@@ -135,7 +162,10 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
     }
 
     protected Connection connect() throws Exception {
-        Class.forName("org.h2.Driver");
+        Class.forName(driverClassName());
+        if (dbUsername() != null) {
+            return DriverManager.getConnection(jdbcUrl, dbUsername(), dbPassword());
+        }
         return DriverManager.getConnection(jdbcUrl);
     }
 
@@ -146,7 +176,7 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
     }
 
     protected void executeAs(final String user, final String password, final String sql) throws Exception {
-        Class.forName("org.h2.Driver");
+        Class.forName(driverClassName());
         try (Connection con = DriverManager.getConnection(jdbcUrl, user, password); Statement stmt = con.createStatement()) {
             stmt.execute(sql);
         }
