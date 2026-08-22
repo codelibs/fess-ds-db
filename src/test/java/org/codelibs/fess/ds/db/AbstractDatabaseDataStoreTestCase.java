@@ -15,6 +15,8 @@
  */
 package org.codelibs.fess.ds.db;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.Statement;
@@ -26,7 +28,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
+import org.codelibs.core.io.InputStreamUtil;
 import org.codelibs.fess.app.service.FailureUrlService;
+import org.codelibs.fess.crawler.container.CrawlerContainer;
+import org.codelibs.fess.crawler.entity.ExtractData;
+import org.codelibs.fess.crawler.extractor.Extractor;
+import org.codelibs.fess.crawler.extractor.ExtractorFactory;
+import org.codelibs.fess.crawler.helper.ContentLengthHelper;
+import org.codelibs.fess.crawler.helper.impl.MimeTypeHelperImpl;
 import org.codelibs.fess.crawler.exception.CrawlingAccessException;
 import org.codelibs.fess.ds.callback.IndexUpdateCallback;
 import org.codelibs.fess.entity.DataStoreParams;
@@ -64,6 +73,8 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
 
     protected CapturingFailureUrlService failureUrlService;
 
+    protected TestExtractorFactory extractorFactory;
+
     @Override
     public void setUp(final TestInfo testInfo) throws Exception {
         super.setUp(testInfo);
@@ -81,6 +92,21 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
         // when container auto-binding fails.
         failureUrlService = new CapturingFailureUrlService();
         ComponentUtil.register(failureUrlService, FailureUrlService.class.getCanonicalName());
+
+        // Binary columns are handed to an extractor, so one has to exist. ExtractorBuilder
+        // resolves its collaborators through a CrawlerContainer, which the unit-test
+        // container does not provide; supply a map-backed one. The extractors tag their
+        // output so an assertion can tell which of them ran.
+        final Map<String, Object> components = new HashMap<>();
+        extractorFactory = new TestExtractorFactory(new MapCrawlerContainer(components));
+        extractorFactory.addExtractor("application/pdf", new TaggingExtractor("pdf"));
+        extractorFactory.addExtractor("text/plain", new TaggingExtractor("text"));
+        components.put("extractorFactory", extractorFactory);
+        components.put("contentLengthHelper", new ContentLengthHelper());
+        components.put("mimeTypeHelper", new MimeTypeHelperImpl());
+        // The name ExtractorBuilder falls back to when no extractor matches the MIME type.
+        components.put("tikaExtractor", new TaggingExtractor("fallback"));
+        ComponentUtil.register(extractorFactory, "extractorFactory");
 
         final ScriptEngineFactory scriptEngineFactory = new ScriptEngineFactory();
         ComponentUtil.register(scriptEngineFactory, "scriptEngineFactory");
@@ -179,6 +205,54 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
         Class.forName(driverClassName());
         try (Connection con = DriverManager.getConnection(jdbcUrl, user, password); Statement stmt = con.createStatement()) {
             stmt.execute(sql);
+        }
+    }
+
+    /** Exposes the protected crawlerContainer field, which has no setter. */
+    protected static class TestExtractorFactory extends ExtractorFactory {
+        protected final Map<String, Object> components;
+
+        protected TestExtractorFactory(final MapCrawlerContainer container) {
+            this.crawlerContainer = container;
+            this.components = container.components;
+        }
+    }
+
+    protected static class MapCrawlerContainer implements CrawlerContainer {
+        private final Map<String, Object> components;
+
+        protected MapCrawlerContainer(final Map<String, Object> components) {
+            this.components = components;
+        }
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public <T> T getComponent(final String name) {
+            return (T) components.get(name);
+        }
+
+        @Override
+        public boolean available() {
+            return true;
+        }
+
+        @Override
+        public void destroy() {
+            // nothing
+        }
+    }
+
+    /** Prefixes the extracted text so an assertion can tell which extractor ran. */
+    protected static class TaggingExtractor implements Extractor {
+        private final String tag;
+
+        protected TaggingExtractor(final String tag) {
+            this.tag = tag;
+        }
+
+        @Override
+        public ExtractData getText(final InputStream in, final Map<String, String> params) {
+            return new ExtractData(tag + ":" + new String(InputStreamUtil.getBytes(in), StandardCharsets.UTF_8));
         }
     }
 

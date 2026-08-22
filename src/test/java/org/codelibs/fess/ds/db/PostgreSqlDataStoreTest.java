@@ -94,11 +94,11 @@ public class PostgreSqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
     }
 
     /**
-     * As on MySQL, a binary column arrives as a byte array and takes the branch
-     * that decodes it as UTF-8 rather than the one that calls an extractor.
+     * As on MySQL, a binary column arrives as a byte array, and it is extracted
+     * rather than decoded as UTF-8.
      */
     @Test
-    public void test_byteaIsReturnedAsByteArrayAndNeverExtracted() throws Exception {
+    public void test_byteaIsExtractedEvenThoughTheDriverReturnsAByteArray() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY, payload BYTEA)");
         final byte[] payload = { '%', 'P', 'D', 'F', '-', '1', '.', '4', (byte) 0x0a, (byte) 0x80 };
         try (Connection con = connect(); PreparedStatement ps = con.prepareStatement("INSERT INTO doc VALUES (1, ?)")) {
@@ -112,17 +112,16 @@ public class PostgreSqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
         final List<Map<String, Object>> docs = runStoreData(paramMap, scripts("content", "payload"));
 
         assertNoRowFailure();
-        assertEquals(new String(payload, StandardCharsets.UTF_8), docs.get(0).get("content"));
+        assertEquals("pdf:" + new String(payload, StandardCharsets.UTF_8), docs.get(0).get("content"));
     }
 
     /**
      * PostgreSQL is where the {@code ARRAY} branch actually runs: the driver
-     * returns a {@link java.sql.Array}. The branch reads the element result set
-     * without advancing it, so the column is dropped and the script referring to
-     * it yields nothing.
+     * returns a {@link java.sql.Array}. The branch used to read the element
+     * result set without advancing it, so the column was dropped.
      */
     @Test
-    public void test_arrayColumnIsDropped() throws Exception {
+    public void test_arrayColumnIsJoined() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY, tags TEXT[])");
         execute("INSERT INTO doc VALUES (1, ARRAY['alpha', 'beta'])");
 
@@ -131,7 +130,7 @@ public class PostgreSqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
         assertNoRowFailure();
         assertEquals(1, docs.size());
         assertEquals("1", docs.get(0).get("url"));
-        assertNull(docs.get(0).get("tags"));
+        assertEquals("alpha beta", docs.get(0).get("tags"));
     }
 
     /**

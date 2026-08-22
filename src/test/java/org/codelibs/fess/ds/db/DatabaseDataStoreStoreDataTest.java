@@ -167,12 +167,13 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
     }
 
     /**
-     * Pins current behaviour: a binary column is decoded as UTF-8 text and never
-     * reaches an extractor, so binary payloads land in the index as mojibake.
-     * Only the {@code Blob} and {@code InputStream} branches call the extractor.
+     * A binary column reaches an extractor whether the driver returns it as a
+     * {@code Blob} or as a {@code byte[]}. It used to be decoded as UTF-8 in the
+     * byte array case, so the same table produced different content depending on
+     * the driver.
      */
     @Test
-    public void test_storeData_binaryColumnIsDecodedAsUtf8_notExtracted() throws Exception {
+    public void test_storeData_binaryColumnIsExtracted() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY, payload VARBINARY(100))");
         final byte[] payload = { '%', 'P', 'D', 'F', '-', '1', '.', '4', (byte) 0x00, (byte) 0xff };
         try (Connection con = connect(); var ps = con.prepareStatement("INSERT INTO doc VALUES (1, ?)")) {
@@ -183,16 +184,17 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
         final List<Map<String, Object>> docs = runStoreData(params("SELECT payload FROM doc"), scripts("content", "PAYLOAD"));
 
         assertNoRowFailure();
-        assertEquals(new String(payload, StandardCharsets.UTF_8), docs.get(0).get("content"));
+        // The %PDF header makes the builder sniff application/pdf, so the pdf extractor runs.
+        assertEquals("pdf:" + new String(payload, StandardCharsets.UTF_8), docs.get(0).get("content"));
     }
 
     /**
-     * Pins current behaviour: the ARRAY branch reads the element ResultSet
-     * without advancing it, so the conversion throws, the column is dropped with
-     * a warning, and the script referring to it silently yields nothing.
+     * The elements of an ARRAY column are joined with spaces. The branch used to
+     * read the element ResultSet without advancing it, so the conversion threw
+     * and the column was dropped.
      */
     @Test
-    public void test_storeData_arrayColumnIsDroppedWithAWarning() throws Exception {
+    public void test_storeData_arrayColumnIsJoined() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY, tags VARCHAR ARRAY)");
         execute("INSERT INTO doc VALUES (1, ARRAY['a', 'b', 'c'])");
 
@@ -200,9 +202,8 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
 
         assertNoRowFailure();
         assertEquals(1, docs.size());
-        // The row is still indexed, but the array column never made it into the map.
         assertEquals("1", docs.get(0).get("url"));
-        assertNull(docs.get(0).get("tags"));
+        assertEquals("a b c", docs.get(0).get("tags"));
     }
 
     // ------------------------------------------------------------------
