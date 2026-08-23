@@ -93,6 +93,8 @@ public class DatabaseDataStore extends AbstractDataStore {
 
     private static final String FETCH_SIZE_PARAM = "fetch_size";
 
+    private static final String QUERY_TIMEOUT_PARAM = "query_timeout";
+
     /** Requests the MySQL row-by-row streaming mode. */
     private static final String MIN_VALUE_PARAM_VALUE = "MIN_VALUE";
 
@@ -204,6 +206,38 @@ public class DatabaseDataStore extends AbstractDataStore {
     }
 
     /**
+     * Retrieves the query timeout, in seconds, from the parameter map.
+     *
+     * <p>
+     * Without one, a query that never returns holds the crawler thread forever:
+     * the data store only checks whether it should stop between rows, so
+     * stopping the job cannot interrupt a call that is blocked inside the
+     * driver. Zero means no limit, which is the JDBC default.
+     * </p>
+     *
+     * @param paramMap the parameter map containing configuration
+     * @return the timeout in seconds, or null when unset or unusable
+     */
+    protected Integer getQueryTimeout(final DataStoreParams paramMap) {
+        final String value = paramMap.getAsString(QUERY_TIMEOUT_PARAM);
+        if (StringUtil.isBlank(value)) {
+            return null;
+        }
+        final String trimmedValue = value.trim();
+        try {
+            final int queryTimeout = Integer.parseInt(trimmedValue);
+            if (queryTimeout < 0) {
+                logger.warn("{}={} is negative and will be ignored. Use 0 for no limit.", QUERY_TIMEOUT_PARAM, trimmedValue);
+                return null;
+            }
+            return queryTimeout;
+        } catch (final NumberFormatException e) {
+            logger.warn("{}={} is not a number and will be ignored.", QUERY_TIMEOUT_PARAM, trimmedValue, e);
+            return null;
+        }
+    }
+
+    /**
      * Retrieves the SQL query from the parameter map.
      *
      * @param paramMap the parameter map containing configuration
@@ -294,10 +328,21 @@ public class DatabaseDataStore extends AbstractDataStore {
 
             final String sql = getSql(paramMap);
             final Integer fetchSize = getFetchSize(paramMap);
+            final Integer queryTimeout = getQueryTimeout(paramMap);
             if (logger.isDebugEnabled()) {
-                logger.debug("sql: {}, fetch_size: {}", sql, fetchSize);
+                logger.debug("sql: {}, fetch_size: {}, query_timeout: {}", sql, fetchSize, queryTimeout);
             }
             stmt = con.createStatement(java.sql.ResultSet.TYPE_FORWARD_ONLY, java.sql.ResultSet.CONCUR_READ_ONLY);
+            if (queryTimeout != null) {
+                try {
+                    stmt.setQueryTimeout(queryTimeout);
+                } catch (final SQLException e) {
+                    // Not every driver supports it. Say so rather than refusing to crawl,
+                    // but do not pretend the query is bounded.
+                    logger.warn("{}={} was rejected by the driver. The query is not bounded by a timeout.", QUERY_TIMEOUT_PARAM,
+                            queryTimeout, e);
+                }
+            }
             if (fetchSize != null) {
                 try {
                     stmt.setFetchSize(fetchSize);

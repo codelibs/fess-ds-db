@@ -336,6 +336,37 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     }
 
     @Test
+    public void test_getQueryTimeout_validValues() {
+        final DataStoreParams paramMap = new DataStoreParams();
+
+        paramMap.put("query_timeout", "30");
+        assertEquals(Integer.valueOf(30), dataStore.getQueryTimeout(paramMap));
+
+        // Zero is the JDBC default and means no limit, so it is passed through.
+        paramMap.put("query_timeout", "0");
+        assertEquals(Integer.valueOf(0), dataStore.getQueryTimeout(paramMap));
+
+        paramMap.put("query_timeout", "  30  ");
+        assertEquals(Integer.valueOf(30), dataStore.getQueryTimeout(paramMap));
+    }
+
+    @Test
+    public void test_getQueryTimeout_unusableValues() {
+        final DataStoreParams paramMap = new DataStoreParams();
+        assertNull(dataStore.getQueryTimeout(paramMap));
+
+        paramMap.put("query_timeout", "");
+        assertNull(dataStore.getQueryTimeout(paramMap));
+
+        // setQueryTimeout rejects a negative value, so it is reported and dropped.
+        paramMap.put("query_timeout", "-1");
+        assertNull(dataStore.getQueryTimeout(paramMap));
+
+        paramMap.put("query_timeout", "30s");
+        assertNull(dataStore.getQueryTimeout(paramMap));
+    }
+
+    @Test
     public void test_maskUrl_hidesUserInfo() {
         assertEquals("jdbc:mysql://****:****@db.example.com:3306/app",
                 DatabaseDataStore.maskUrl("jdbc:mysql://scott:tiger@db.example.com:3306/app"));
