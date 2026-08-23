@@ -300,20 +300,39 @@ public class DatabaseDataStoreStoreDataTest extends AbstractDatabaseDataStoreTes
     }
 
     /**
-     * Pins current behaviour: the recorded failure URL is the entire SQL
-     * statement with the row number appended.
+     * A failed row is recorded under the document URL, which is what makes the
+     * entry recognisable in the failure URL list. It used to be recorded under
+     * the entire SQL statement with the row number appended - unbounded in
+     * length, identical for every failed row of the same query, and carrying any
+     * literal the query contained.
      */
     @Test
-    public void test_storeData_failureUrlIsTheWholeSqlPlusRowNumber() throws Exception {
+    public void test_storeData_failureUrlIsTheDocumentUrl() throws Exception {
+        execute("CREATE TABLE doc (id INT PRIMARY KEY, u VARCHAR(100))");
+        execute("INSERT INTO doc VALUES (1, 'https://example.com/1')");
+
+        dataStore.storeData(newConfig(), new CapturingCallback(new ArrayList<>(), dataMap -> true), //
+                params("SELECT id, u FROM doc"), scripts("url", "U"), new HashMap<>());
+
+        assertEquals(1, failureUrlService.urls.size());
+        assertEquals("https://example.com/1", failureUrlService.urls.get(0));
+    }
+
+    /**
+     * When the scripts never produced a URL - because the failure happened before
+     * they ran, or because none of them maps to the url field - the row is
+     * identified by data configuration and row number instead.
+     */
+    @Test
+    public void test_storeData_failureUrlFallsBackToConfigAndRow() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY)");
         execute("INSERT INTO doc VALUES (1)");
 
-        final String sql = "SELECT id FROM doc ORDER BY id";
         dataStore.storeData(newConfig(), new CapturingCallback(new ArrayList<>(), dataMap -> true), //
-                params(sql), scripts("url", "ID"), new HashMap<>());
+                params("SELECT id FROM doc"), scripts("title", "ID"), new HashMap<>());
 
         assertEquals(1, failureUrlService.urls.size());
-        assertEquals(sql + ":1", failureUrlService.urls.get(0));
+        assertEquals("datastore://test-config/1", failureUrlService.urls.get(0));
     }
 
     /**

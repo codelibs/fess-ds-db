@@ -305,6 +305,7 @@ public class DatabaseDataStore extends AbstractDataStore {
             final Map<String, String> scriptMap, final Map<String, Object> defaultDataMap) {
 
         final CrawlerStatsHelper crawlerStatsHelper = ComponentUtil.getCrawlerStatsHelper();
+        final FessConfig fessConfig = ComponentUtil.getFessConfig();
         final long readInterval = getReadInterval(paramMap);
         final String scriptType = getScriptType(paramMap);
 
@@ -393,6 +394,11 @@ public class DatabaseDataStore extends AbstractDataStore {
                     if (logger.isDebugEnabled()) {
                         logger.debug("dataMap: {}", dataMap);
                     }
+
+                    if (dataMap.get(fessConfig.getIndexFieldUrl()) instanceof final String url) {
+                        statsKey.setUrl(url);
+                    }
+
                     callback.store(paramMap, dataMap);
                     crawlerStatsHelper.record(statsKey, StatsAction.FINISHED);
                 } catch (final CrawlingAccessException e) {
@@ -421,14 +427,14 @@ public class DatabaseDataStore extends AbstractDataStore {
                             loop = false;
                         }
                     } else {
-                        url = sql + ":" + rs.getRow();
+                        url = getFailureUrl(config, dataMap, rs);
                     }
                     final FailureUrlService failureUrlService = ComponentUtil.getComponent(FailureUrlService.class);
                     failureUrlService.store(config, errorName, url, target);
                     crawlerStatsHelper.record(statsKey, StatsAction.ACCESS_EXCEPTION);
                 } catch (final Throwable t) {
                     logger.warn("Crawling Access Exception at : {}", dataMap, t);
-                    final String url = sql + ":" + rs.getRow();
+                    final String url = getFailureUrl(config, dataMap, rs);
                     final FailureUrlService failureUrlService = ComponentUtil.getComponent(FailureUrlService.class);
                     failureUrlService.store(config, t.getClass().getCanonicalName(), url, t);
                     crawlerStatsHelper.record(statsKey, StatsAction.EXCEPTION);
@@ -473,6 +479,38 @@ public class DatabaseDataStore extends AbstractDataStore {
             }
 
         }
+    }
+
+    /**
+     * Identifies a row that failed, for the failure URL list.
+     *
+     * <p>
+     * The document URL is used when the scripts got far enough to produce one,
+     * which is what makes the entry recognisable in the admin UI. Otherwise the
+     * row is identified by data configuration and row number. The query itself is
+     * deliberately not used: it is unbounded in length for a keyword field, it
+     * repeats identically for every failed row, and it can carry literals that do
+     * not belong in a stored record.
+     * </p>
+     *
+     * @param config the data configuration
+     * @param dataMap the document built so far
+     * @param resultSet the result set positioned on the failed row
+     * @return a URL identifying the failed row
+     */
+    protected String getFailureUrl(final DataConfig config, final Map<String, Object> dataMap, final ResultSet resultSet) {
+        if (dataMap.get(ComponentUtil.getFessConfig().getIndexFieldUrl()) instanceof final String url && StringUtil.isNotBlank(url)) {
+            return url;
+        }
+        String row = "unknown";
+        try {
+            row = Integer.toString(resultSet.getRow());
+        } catch (final SQLException e) {
+            // getRow() fails on a broken connection, which is exactly when a row fails.
+            // Losing the row number must not cost the failure record itself.
+            logger.debug("Failed to get the current row number.", e);
+        }
+        return "datastore://" + config.getId() + "/" + row;
     }
 
     /**
