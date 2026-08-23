@@ -134,24 +134,22 @@ public class PostgreSqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
     }
 
     /**
-     * {@code fetch_size=MIN_VALUE} is a MySQL idiom. PostgreSQL rejects the
-     * negative value, the exception escapes the row loop, and the crawl ends
-     * having indexed nothing. Nothing warns the administrator that the value is
-     * driver specific.
+     * {@code fetch_size=MIN_VALUE} is a MySQL idiom, and PostgreSQL rejects the
+     * negative value. It used to end the crawl having indexed nothing; the
+     * rejection is now reported and the crawl runs with the driver default. A
+     * configuration copied from a MySQL data store therefore still works here.
      */
     @Test
-    public void test_fetchSizeMinValueKillsTheCrawl() throws Exception {
+    public void test_fetchSizeMinValueFallsBackToTheDriverDefault() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY)");
         execute("INSERT INTO doc VALUES (1)");
 
         final DataStoreParams paramMap = params("SELECT id FROM doc");
         paramMap.put("fetch_size", "MIN_VALUE");
 
-        try {
-            runStoreData(paramMap, scripts("url", "id"));
-            fail("Should throw DataStoreException");
-        } catch (final DataStoreException e) {
-            assertEquals("Failed to crawl data in DB.", e.getMessage());
-        }
+        final List<Map<String, Object>> docs = runStoreData(paramMap, scripts("url", "id"));
+
+        assertNoRowFailure();
+        assertEquals(1, docs.size());
     }
 }
