@@ -38,6 +38,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.logging.log4j.LogManager;
@@ -99,6 +102,9 @@ public class DatabaseDataStore extends AbstractDataStore {
 
     private static final String COLUMN_LABEL_PREFIX = "column_label.";
 
+    /** A {@code key=value} pair in the query part of a JDBC URL. */
+    private static final Pattern URL_PROPERTY_PATTERN = Pattern.compile("([?&;])([^=&;\\s]+)=([^&;\\s]*)");
+
     @Override
     protected String getName() {
         return this.getClass().getSimpleName();
@@ -114,7 +120,7 @@ public class DatabaseDataStore extends AbstractDataStore {
     protected String getDriverClass(final DataStoreParams paramMap) {
         final String driverName = paramMap.getAsString(DRIVER_PARAM);
         if (StringUtil.isBlank(driverName)) {
-            throw new DataStoreException("JDBC driver is null");
+            throw new DataStoreException("The " + DRIVER_PARAM + " parameter is required.");
         }
         return driverName;
     }
@@ -143,10 +149,17 @@ public class DatabaseDataStore extends AbstractDataStore {
      * Retrieves the database URL from the parameter map.
      *
      * @param paramMap the parameter map containing configuration
-     * @return the database URL, or null if not specified
+     * @return the database URL
+     * @throws DataStoreException if the url parameter is null, empty, or blank
      */
     protected String getUrl(final DataStoreParams paramMap) {
-        return paramMap.getAsString(URL_PARAM);
+        final String url = paramMap.getAsString(URL_PARAM);
+        if (StringUtil.isBlank(url)) {
+            // Without this the driver decides what a missing URL means, which ranges
+            // from a NullPointerException to "No suitable driver".
+            throw new DataStoreException("The " + URL_PARAM + " parameter is required.");
+        }
+        return url;
     }
 
     /**
@@ -200,9 +213,57 @@ public class DatabaseDataStore extends AbstractDataStore {
     protected String getSql(final DataStoreParams paramMap) {
         final String sql = paramMap.getAsString(SQL_PARAM);
         if (StringUtil.isBlank(sql)) {
-            throw new DataStoreException("sql is null");
+            throw new DataStoreException("The " + SQL_PARAM + " parameter is required.");
         }
         return sql;
+    }
+
+    /**
+     * Replacement for a value that must not reach the log.
+     */
+    protected static final String MASKED = "****";
+
+    /**
+     * Whether a parameter or connection property name denotes a secret.
+     *
+     * <p>
+     * The same pattern the admin UI uses to decide which data store parameters to
+     * encrypt at rest ({@code app.encrypt.property.pattern}), so a value stored as
+     * a secret is also treated as one when logging.
+     * </p>
+     *
+     * @param name the parameter or property name
+     * @return true if the value must be masked
+     */
+    protected static boolean isSensitiveName(final String name) {
+        return name != null && name.matches(ComponentUtil.getFessConfig().getAppEncryptPropertyPattern());
+    }
+
+    /**
+     * Hides credentials embedded in a JDBC URL.
+     *
+     * <p>
+     * Both forms occur in practice: {@code //user:password@host} and a query
+     * parameter such as {@code ?password=secret}. A URL is otherwise useful in a
+     * log, so the rest is left intact.
+     * </p>
+     *
+     * @param url the JDBC URL, may be null
+     * @return the URL with any credential replaced
+     */
+    protected static String maskUrl(final String url) {
+        if (url == null) {
+            return null;
+        }
+        final String withoutUserInfo = url.replaceAll("//[^/@\\s]*:[^/@\\s]*@", "//" + MASKED + ":" + MASKED + "@");
+        final Matcher matcher = URL_PROPERTY_PATTERN.matcher(withoutUserInfo);
+        final StringBuilder buf = new StringBuilder(withoutUserInfo.length());
+        while (matcher.find()) {
+            matcher.appendReplacement(buf, isSensitiveName(matcher.group(2)) ? matcher.group(1) + matcher.group(2) + "=" + MASKED
+                    : Matcher.quoteReplacement(matcher.group()));
+        }
+        matcher.appendTail(buf);
+        return buf.toString();
     }
 
     @Override
@@ -217,9 +278,19 @@ public class DatabaseDataStore extends AbstractDataStore {
         Statement stmt = null;
         ResultSet rs = null;
         try {
-            Class.forName(getDriverClass(paramMap));
+            final String driverClass = getDriverClass(paramMap);
+            try {
+                Class.forName(driverClass);
+            } catch (final ClassNotFoundException e) {
+                throw new DataStoreException("The JDBC driver " + driverClass
+                        + " is not on the crawler classpath. Deploy the driver jar to WEB-INF/lib or WEB-INF/env/crawler/lib.", e);
+            }
 
-            con = getConnection(paramMap);
+            try {
+                con = getConnection(paramMap);
+            } catch (final SQLException e) {
+                throw new DataStoreException("Failed to connect to " + maskUrl(getUrl(paramMap)) + ".", e);
+            }
 
             final String sql = getSql(paramMap);
             final Integer fetchSize = getFetchSize(paramMap);
@@ -239,7 +310,11 @@ public class DatabaseDataStore extends AbstractDataStore {
                             e);
                 }
             }
-            rs = stmt.executeQuery(sql); // SQL generated by an administrator
+            try {
+                rs = stmt.executeQuery(sql); // SQL generated by an administrator
+            } catch (final SQLException e) {
+                throw new DataStoreException("Failed to execute the query.", e);
+            }
             boolean loop = true;
             int count = 0;
             while (rs.next() && loop && alive) {
@@ -320,6 +395,11 @@ public class DatabaseDataStore extends AbstractDataStore {
                     sleep(readInterval);
                 }
             }
+        } catch (final DataStoreException e) {
+            // Already carries a message that says what went wrong. Relabelling it as a
+            // generic crawl failure is how a missing parameter used to become
+            // indistinguishable from a broken query.
+            throw e;
         } catch (final Exception e) {
             throw new DataStoreException("Failed to crawl data in DB.", e);
         } finally {
@@ -363,7 +443,7 @@ public class DatabaseDataStore extends AbstractDataStore {
 
         final String username = getUsername(paramMap);
         if (logger.isDebugEnabled()) {
-            logger.debug("jdbc: {} : {}", jdbcUrl, username);
+            logger.debug("jdbc: {} : {}", maskUrl(jdbcUrl), username);
         }
 
         final Properties info = new Properties();
@@ -381,7 +461,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                 final String k = key.substring(INFO_PREFIX.length());
                 final Object v = paramMap.get(key);
                 if (logger.isDebugEnabled()) {
-                    logger.debug("jdbc: info: {}={}", k, v);
+                    logger.debug("jdbc: info: {}={}", k, isSensitiveName(k) ? MASKED : v);
                 }
                 info.put(k, v);
             }
@@ -640,9 +720,22 @@ public class DatabaseDataStore extends AbstractDataStore {
             return paramMap.values();
         }
 
+        /**
+         * Renders the map with secrets masked.
+         *
+         * <p>
+         * The whole data store parameter map is copied in here so scripts can see
+         * it, credentials included, and this map is logged once per row at DEBUG.
+         * Without masking, turning on debug logging writes the database password to
+         * the log as many times as there are rows.
+         * </p>
+         */
         @Override
         public String toString() {
-            return paramMap.toString();
+            return paramMap.entrySet()
+                    .stream()
+                    .map(entry -> entry.getKey() + "=" + (isSensitiveName(entry.getKey()) ? MASKED : entry.getValue()))
+                    .collect(Collectors.joining(", ", "{", "}"));
         }
 
     }
