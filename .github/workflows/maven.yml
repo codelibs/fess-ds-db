@@ -8,10 +8,10 @@ on:
     branches:
     - master
     - "*.x"
+  # No branch filter: `pull_request.branches` matches the *base* branch, so
+  # restricting it to master/*.x means a stacked pull request - one whose base
+  # is the previous branch in the stack - gets no CI at all.
   pull_request:
-    branches:
-    - master
-    - "*.x"
 
 jobs:
   build:

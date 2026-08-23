@@ -15,6 +15,7 @@
  */
 package org.codelibs.fess.ds.db;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 import java.sql.Connection;
@@ -53,6 +54,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         super.tearDown(testInfo);
     }
 
+    @Test
     public void test_getDriverClass_validDriver() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "org.h2.Driver");
@@ -61,6 +63,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("org.h2.Driver", result);
     }
 
+    @Test
     public void test_getDriverClass_nullDriver() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -72,6 +75,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getDriverClass_emptyDriver() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "");
@@ -84,6 +88,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getDriverClass_blankDriver() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "   ");
@@ -96,6 +101,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getSql_validSql() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("sql", "SELECT * FROM users");
@@ -104,6 +110,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("SELECT * FROM users", result);
     }
 
+    @Test
     public void test_getSql_nullSql() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -115,6 +122,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getSql_emptySql() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("sql", "");
@@ -127,6 +135,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getSql_blankSql() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("sql", "   ");
@@ -139,6 +148,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getUsername_validUsername() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("username", "testuser");
@@ -147,6 +157,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("testuser", result);
     }
 
+    @Test
     public void test_getUsername_nullUsername() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -154,6 +165,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getUsername_emptyUsername() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("username", "");
@@ -162,6 +174,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("", result);
     }
 
+    @Test
     public void test_getPassword_validPassword() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("password", "secret123");
@@ -170,6 +183,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("secret123", result);
     }
 
+    @Test
     public void test_getPassword_nullPassword() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -177,6 +191,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getPassword_emptyPassword() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("password", "");
@@ -185,6 +200,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("", result);
     }
 
+    @Test
     public void test_getUrl_validUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
@@ -193,6 +209,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("jdbc:h2:mem:test", result);
     }
 
+    @Test
     public void test_getUrl_nullUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -200,6 +217,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getUrl_emptyUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "");
@@ -208,6 +226,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("", result);
     }
 
+    @Test
     public void test_getFetchSize_validNumber() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "1000");
@@ -216,6 +235,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals(Integer.valueOf(1000), result);
     }
 
+    @Test
     public void test_getFetchSize_minValue() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "MIN_VALUE");
@@ -224,6 +244,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals(Integer.valueOf(Integer.MIN_VALUE), result);
     }
 
+    @Test
     public void test_getFetchSize_zero() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "0");
@@ -232,6 +253,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals(Integer.valueOf(0), result);
     }
 
+    @Test
     public void test_getFetchSize_negativeNumber() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "-100");
@@ -240,6 +262,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals(Integer.valueOf(-100), result);
     }
 
+    @Test
     public void test_getFetchSize_nullValue() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -247,6 +270,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getFetchSize_emptyValue() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "");
@@ -255,6 +279,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getFetchSize_blankValue() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "   ");
@@ -263,6 +288,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getFetchSize_invalidNumber() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "abc123");
@@ -271,6 +297,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getFetchSize_invalidNumberFormat() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "12.34");
@@ -279,6 +306,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_getFetchSize_maxValue() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", String.valueOf(Integer.MAX_VALUE));
@@ -287,11 +315,13 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals(Integer.valueOf(Integer.MAX_VALUE), result);
     }
 
+    @Test
     public void test_getName() {
         final String result = dataStore.getName();
         assertEquals("DatabaseDataStore", result);
     }
 
+    @Test
     public void test_getConnection_invalidUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "invalid_url");
@@ -305,6 +335,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getConnection_withInfoParameters() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
@@ -313,16 +344,17 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         paramMap.put("info.useSSL", "false");
         paramMap.put("info.timeout", "30");
 
+        // No JDBC driver is on the test classpath at this point, so the call must fail.
+        // Without the fail() below this test passes whether or not a connection is made.
         try {
-            // This test would require H2 database driver to be available
-            // For now, we're testing parameter handling logic
             dataStore.getConnection(paramMap);
+            fail("Should throw SQLException because no JDBC driver is registered");
         } catch (final SQLException e) {
-            // Expected if H2 driver is not available
-            assertTrue(e.getMessage().contains("No suitable driver") || e.getMessage().contains("Driver not found"));
+            assertTrue(e.getMessage(), e.getMessage().contains("No suitable driver"));
         }
     }
 
+    @Test
     public void test_getConnection_nullUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("username", "testuser");
@@ -337,6 +369,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getConnection_emptyUrl() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "");
@@ -352,31 +385,45 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_getConnection_withoutCredentials() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
 
+        // See test_getConnection_withInfoParameters: the call must fail without a driver.
         try {
             dataStore.getConnection(paramMap);
+            fail("Should throw SQLException because no JDBC driver is registered");
         } catch (final SQLException e) {
-            // Expected if H2 driver is not available
-            assertTrue(e.getMessage().contains("No suitable driver") || e.getMessage().contains("Driver not found"));
+            assertTrue(e.getMessage(), e.getMessage().contains("No suitable driver"));
         }
     }
 
-    public void test_parameter_constants() {
-        // Test that parameter constants are correctly defined
-        assertEquals("driver", "driver");
-        assertEquals("url", "url");
-        assertEquals("username", "username");
-        assertEquals("password", "password");
-        assertEquals("sql", "sql");
-        assertEquals("fetch_size", "fetch_size");
-        assertEquals("default_mimetype", "default_mimetype");
-        assertEquals("info.", "info.");
-        assertEquals("column_label.", "column_label.");
+    /**
+     * Pins the public parameter names. These keys are part of the data store
+     * configuration contract, so renaming one silently breaks every existing
+     * data config. Keys without a getter (default_mimetype, info., column_label.)
+     * are covered by the storeData tests.
+     */
+    @Test
+    public void test_parameter_names_areStable() {
+        final DataStoreParams paramMap = new DataStoreParams();
+        paramMap.put("driver", "org.h2.Driver");
+        paramMap.put("url", "jdbc:h2:mem:contract");
+        paramMap.put("username", "scott");
+        paramMap.put("password", "tiger");
+        paramMap.put("sql", "SELECT 1");
+        paramMap.put("fetch_size", "500");
+
+        assertEquals("org.h2.Driver", dataStore.getDriverClass(paramMap));
+        assertEquals("jdbc:h2:mem:contract", dataStore.getUrl(paramMap));
+        assertEquals("scott", dataStore.getUsername(paramMap));
+        assertEquals("tiger", dataStore.getPassword(paramMap));
+        assertEquals("SELECT 1", dataStore.getSql(paramMap));
+        assertEquals(Integer.valueOf(500), dataStore.getFetchSize(paramMap));
     }
 
+    @Test
     public void test_getDriverClass_withSpecialCharacters() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "com.mysql.cj.jdbc.Driver");
@@ -385,6 +432,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("com.mysql.cj.jdbc.Driver", result);
     }
 
+    @Test
     public void test_getSql_withComplexQuery() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("sql", "SELECT id, name, email FROM users WHERE created_at > '2023-01-01' ORDER BY id");
@@ -393,6 +441,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("SELECT id, name, email FROM users WHERE created_at > '2023-01-01' ORDER BY id", result);
     }
 
+    @Test
     public void test_getFetchSize_boundaryValues() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -407,6 +456,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals(Integer.valueOf(999999), result);
     }
 
+    @Test
     public void test_getFetchSize_leadingTrailingSpaces() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", "  100  ");
@@ -417,6 +467,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertNull(result);
     }
 
+    @Test
     public void test_parameterExtraction_withNullDataStoreParams() {
         try {
             dataStore.getDriverClass(null);
@@ -427,6 +478,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         }
     }
 
+    @Test
     public void test_parameterExtraction_withSpecialValues() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -438,6 +490,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
         assertEquals("pass!@#$%^&*()", dataStore.getPassword(paramMap));
     }
 
+    @Test
     public void test_parameterExtraction_withUnicodeValues() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -456,6 +509,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getDriverClass with various driver names
      */
+    @Test
     public void test_getDriverClass_withVariousDriverNames() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -475,6 +529,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getSql with SQL containing special characters and line breaks
      */
+    @Test
     public void test_getSql_withMultilineQuery() {
         final DataStoreParams paramMap = new DataStoreParams();
         final String multilineSql = "SELECT id, name, email\n" + "FROM users\n" + "WHERE created_at > '2023-01-01'\n" + "ORDER BY id DESC";
@@ -487,6 +542,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getSql with SQL containing special database-specific syntax
      */
+    @Test
     public void test_getSql_withSpecialSyntax() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -506,6 +562,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getUrl with various JDBC URL formats
      */
+    @Test
     public void test_getUrl_withVariousFormats() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -529,6 +586,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getFetchSize with boundary values near Integer limits
      */
+    @Test
     public void test_getFetchSize_boundaryValuesNearLimits() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -546,6 +604,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getFetchSize with overflow values (beyond Integer range)
      */
+    @Test
     public void test_getFetchSize_withOverflowValues() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -559,6 +618,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getFetchSize with various invalid formats
      */
+    @Test
     public void test_getFetchSize_withVariousInvalidFormats() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -582,6 +642,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getUsername and getPassword with empty strings vs null
      */
+    @Test
     public void test_credentials_emptyVsNull() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -602,6 +663,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getConnection with various URL formats to ensure proper error handling
      */
+    @Test
     public void test_getConnection_withMalformedUrls() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -627,6 +689,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getConnection with multiple info parameters
      */
+    @Test
     public void test_getConnection_withMultipleInfoParameters() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
@@ -651,6 +714,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getName returns expected class name
      */
+    @Test
     public void test_getName_consistency() {
         final String name = dataStore.getName();
         assertEquals("DatabaseDataStore", name);
@@ -660,6 +724,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test parameter extraction with whitespace-only values
      */
+    @Test
     public void test_parameters_withWhitespaceOnly() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -679,6 +744,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test SQL parameter with very long query
      */
+    @Test
     public void test_getSql_withVeryLongQuery() {
         final DataStoreParams paramMap = new DataStoreParams();
         final StringBuilder longSql = new StringBuilder("SELECT ");
@@ -700,6 +766,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
      * Note: StringUtil.isBlank only checks for blank strings (null, empty, or whitespace-only),
      * not strings with leading/trailing spaces around non-whitespace content.
      */
+    @Test
     public void test_getDriverClass_withSurroundingSpaces() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -712,6 +779,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getFetchSize with MIN_VALUE case sensitivity
      */
+    @Test
     public void test_getFetchSize_minValueCaseSensitivity() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -731,6 +799,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test parameter combination scenarios
      */
+    @Test
     public void test_parameterCombination_fullConfiguration() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "org.h2.Driver");
@@ -751,6 +820,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test parameter combination scenarios with minimal configuration
      */
+    @Test
     public void test_parameterCombination_minimalConfiguration() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "org.h2.Driver");
@@ -767,6 +837,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test info parameter prefix filtering
      */
+    @Test
     public void test_infoParameters_prefixFiltering() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
@@ -789,6 +860,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getConnection with username but no password
      */
+    @Test
     public void test_getConnection_usernameWithoutPassword() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
@@ -807,6 +879,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getConnection with password but no username
      */
+    @Test
     public void test_getConnection_passwordWithoutUsername() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("url", "jdbc:h2:mem:test");
@@ -825,6 +898,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test getFetchSize with exactly Integer.MIN_VALUE as string
      */
+    @Test
     public void test_getFetchSize_exactMinValueString() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("fetch_size", String.valueOf(Integer.MIN_VALUE));
@@ -837,6 +911,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
      * Test SQL injection patterns (ensuring they're passed as-is, not validated)
      * Note: This implementation trusts administrators to write safe SQL
      */
+    @Test
     public void test_getSql_withSqlInjectionPatterns() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -856,6 +931,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test parameter retrieval doesn't modify the original map
      */
+    @Test
     public void test_parameterRetrieval_doesNotModifyMap() {
         final DataStoreParams paramMap = new DataStoreParams();
         paramMap.put("driver", "org.h2.Driver");
@@ -879,6 +955,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test URL with special characters
      */
+    @Test
     public void test_getUrl_withSpecialCharacters() {
         final DataStoreParams paramMap = new DataStoreParams();
 
@@ -894,6 +971,7 @@ public class DatabaseDataStoreTest extends UnitDsTestCase {
     /**
      * Test credentials with SQL special characters
      */
+    @Test
     public void test_credentials_withSqlSpecialCharacters() {
         final DataStoreParams paramMap = new DataStoreParams();
 
