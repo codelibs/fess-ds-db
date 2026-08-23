@@ -32,7 +32,6 @@ import org.codelibs.fess.crawler.extractor.ExtractorFactory;
 import org.codelibs.fess.crawler.helper.ContentLengthHelper;
 import org.codelibs.fess.crawler.helper.impl.MimeTypeHelperImpl;
 import org.codelibs.fess.entity.DataStoreParams;
-import org.codelibs.fess.exception.FessSystemException;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
@@ -53,24 +52,6 @@ import org.junit.jupiter.api.TestInfo;
 public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase {
 
     private static final String PDF_MIMETYPE = "application/pdf";
-
-    @Override
-    public void setUp(final TestInfo testInfo) throws Exception {
-        super.setUp(testInfo);
-
-        final Map<String, Object> components = new HashMap<>();
-        final TestExtractorFactory extractorFactory = new TestExtractorFactory(new MapCrawlerContainer(components));
-        extractorFactory.addExtractor(PDF_MIMETYPE, new TaggingExtractor("pdf"));
-        extractorFactory.addExtractor("text/plain", new TaggingExtractor("text"));
-
-        components.put("extractorFactory", extractorFactory);
-        components.put("contentLengthHelper", new ContentLengthHelper());
-        components.put("mimeTypeHelper", new MimeTypeHelperImpl());
-        // The name ExtractorBuilder falls back to when no extractor matches the MIME type.
-        components.put("tikaExtractor", new TaggingExtractor("fallback"));
-
-        ComponentUtil.register(extractorFactory, "extractorFactory");
-    }
 
     // ------------------------------------------------------------------
     // which branch reaches an extractor
@@ -114,13 +95,12 @@ public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase 
     }
 
     /**
-     * Pins current behaviour: the MIME type is looked up in the map that is
-     * still being built, so it is only found when its column appears earlier in
-     * the SELECT list than the BLOB column. Reordering the SELECT list silently
-     * changes which extractor runs.
+     * The hint applies wherever its column sits in the SELECT list. It used to be
+     * looked up in the map that was still being built, so it only took effect
+     * when its column happened to come first.
      */
     @Test
-    public void test_columnLabelMimetypeIsIgnoredWhenItsColumnComesAfterTheBlob() throws Exception {
+    public void test_columnLabelMimetypeAppliesWhenItsColumnComesAfterTheBlob() throws Exception {
         createBlobTableWithMimetype("hello", PDF_MIMETYPE);
 
         final DataStoreParams paramMap = params("SELECT payload, mime FROM doc");
@@ -129,9 +109,7 @@ public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase 
         final List<Map<String, Object>> docs = runStoreData(paramMap, scripts("content", "PAYLOAD"));
 
         assertNoRowFailure();
-        // Same query, same data, only the column order differs - and the PDF extractor
-        // never runs. The builder falls back to sniffing, which yields text/plain.
-        assertEquals("text:hello", docs.get(0).get("content"));
+        assertEquals("pdf:hello", docs.get(0).get("content"));
     }
 
     @Test
@@ -157,16 +135,13 @@ public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase 
     // ------------------------------------------------------------------
 
     /**
-     * Pins current behaviour: an extractor failure is neither an IOException nor
-     * a SQLException, so it escapes the per-column catch and is rethrown as
-     * {@code FessSystemException("Failed to access meta data.")}. The message
-     * points at metadata access, the row is lost, and the real cause is only
-     * visible in the exception chain.
+     * An extraction failure is reported as itself. It used to be rethrown as
+     * {@code FessSystemException("Failed to access meta data.")}, which named a
+     * cause that had nothing to do with what went wrong.
      */
     @Test
-    public void test_extractionFailureIsReportedAsAMetadataFailure() throws Exception {
+    public void test_extractionFailureIsReportedAsItself() throws Exception {
         createBlobTable("hello");
-        final TestExtractorFactory extractorFactory = ComponentUtil.getComponent("extractorFactory");
         // A MIME type of its own: addExtractor appends, and a composite only moves on to
         // the next extractor when the previous one reports the data as unsupported.
         extractorFactory.addExtractor("application/x-failing", new FailingExtractor());
@@ -176,11 +151,13 @@ public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase 
 
         final List<Map<String, Object>> docs = runStoreData(paramMap, scripts("content", "PAYLOAD"));
 
+        // The row is still recorded as failed rather than indexed with no content.
         assertTrue(docs.isEmpty());
         assertEquals(1, failureUrlService.throwables.size());
         final Throwable recorded = failureUrlService.throwables.get(0);
-        assertTrue(recorded.getClass().getName(), recorded instanceof FessSystemException);
-        assertEquals("Failed to access meta data.", recorded.getMessage());
+        assertTrue(recorded.getClass().getName(), recorded instanceof ExtractException);
+        assertEquals("Failed to extract data.", recorded.getMessage());
+        assertEquals("cannot extract this", recorded.getCause().getMessage());
     }
 
     /**
@@ -200,7 +177,6 @@ public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase 
         // Lower the extractor bound below the payload size. The CLOB has no such bound.
         final ContentLengthHelper contentLengthHelper = new ContentLengthHelper();
         contentLengthHelper.setDefaultMaxLength(1024L);
-        final TestExtractorFactory extractorFactory = ComponentUtil.getComponent("extractorFactory");
         extractorFactory.components.put("contentLengthHelper", contentLengthHelper);
 
         final List<Map<String, Object>> docs = runStoreData(params("SELECT body FROM doc"), scripts("content", "BODY"));
@@ -231,54 +207,6 @@ public class DatabaseDataStoreLobTest extends AbstractDatabaseDataStoreTestCase 
             ps.setString(1, mimetype);
             ps.setBytes(2, content.getBytes(StandardCharsets.UTF_8));
             ps.execute();
-        }
-    }
-
-    /** Exposes the protected crawlerContainer field, which has no setter. */
-    static class TestExtractorFactory extends ExtractorFactory {
-        final Map<String, Object> components;
-
-        TestExtractorFactory(final MapCrawlerContainer container) {
-            this.crawlerContainer = container;
-            this.components = container.components;
-        }
-    }
-
-    private static class MapCrawlerContainer implements CrawlerContainer {
-        private final Map<String, Object> components;
-
-        MapCrawlerContainer(final Map<String, Object> components) {
-            this.components = components;
-        }
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public <T> T getComponent(final String name) {
-            return (T) components.get(name);
-        }
-
-        @Override
-        public boolean available() {
-            return true;
-        }
-
-        @Override
-        public void destroy() {
-            // nothing
-        }
-    }
-
-    /** Prefixes the extracted text so an assertion can tell which extractor ran. */
-    private static class TaggingExtractor implements Extractor {
-        private final String tag;
-
-        TaggingExtractor(final String tag) {
-            this.tag = tag;
-        }
-
-        @Override
-        public ExtractData getText(final InputStream in, final Map<String, String> params) {
-            return new ExtractData(tag + ":" + new String(InputStreamUtil.getBytes(in), StandardCharsets.UTF_8));
         }
     }
 

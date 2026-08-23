@@ -89,14 +89,13 @@ public class MySqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
     }
 
     /**
-     * The reason the {@code byte[]} branch matters in practice: MySQL returns a
-     * BLOB column as a byte array, not as {@link java.sql.Blob}, so it takes the
-     * branch that decodes as UTF-8 and never calls an extractor. A PDF stored in
-     * a MySQL BLOB is indexed as mojibake, and neither
-     * {@code column_label.mimetype} nor {@code default_mimetype} changes that.
+     * MySQL returns a BLOB column as a byte array rather than as
+     * {@link java.sql.Blob}, so this is the driver that proves the byte array
+     * branch extracts. It used to decode as UTF-8 instead, which indexed a PDF
+     * stored in a MySQL BLOB as mojibake however the type hints were set.
      */
     @Test
-    public void test_blobIsReturnedAsByteArrayAndNeverExtracted() throws Exception {
+    public void test_blobIsExtractedEvenThoughTheDriverReturnsAByteArray() throws Exception {
         execute("CREATE TABLE doc (id INT PRIMARY KEY, payload BLOB)");
         final byte[] payload = { '%', 'P', 'D', 'F', '-', '1', '.', '4', (byte) 0x0a, (byte) 0x80 };
         try (Connection con = connect(); PreparedStatement ps = con.prepareStatement("INSERT INTO doc VALUES (1, ?)")) {
@@ -110,7 +109,7 @@ public class MySqlDataStoreTest extends AbstractDatabaseDataStoreTestCase {
         final List<Map<String, Object>> docs = runStoreData(paramMap, scripts("content", "payload"));
 
         assertNoRowFailure();
-        assertEquals(new String(payload, StandardCharsets.UTF_8), docs.get(0).get("content"));
+        assertEquals("pdf:" + new String(payload, StandardCharsets.UTF_8), docs.get(0).get("content"));
     }
 
     /**

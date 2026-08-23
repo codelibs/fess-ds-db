@@ -15,10 +15,10 @@
  */
 package org.codelibs.fess.ds.db;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.Reader;
-import java.nio.charset.StandardCharsets;
 import java.sql.Array;
 import java.sql.Blob;
 import java.sql.Clob;
@@ -30,8 +30,11 @@ import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -379,21 +382,101 @@ public class DatabaseDataStore extends AbstractDataStore {
             this.paramMap.put("crawlingConfig", config);
             this.paramMap.put("crawlingContext", crawlingContext);
 
+            final String[] labels;
             try {
                 final ResultSetMetaData metaData = resultSet.getMetaData();
-                final int columnCount = metaData.getColumnCount();
-                for (int i = 0; i < columnCount; i++) {
-                    try {
-                        final String label = metaData.getColumnLabel(i + 1);
-                        final String value = getColumnValue(resultSet, i + 1);
-                        this.paramMap.put(label, value);
-                    } catch (final IOException | SQLException e) {
-                        logger.warn("Failed to parse data in a result set. The column is {}.", i + 1, e);
-                    }
+                labels = new String[metaData.getColumnCount()];
+                for (int i = 0; i < labels.length; i++) {
+                    labels[i] = metaData.getColumnLabel(i + 1);
                 }
-            } catch (final Exception e) {
+            } catch (final SQLException e) {
+                // Only genuine meta data failures reach here. A failure while converting
+                // a column must not be relabelled as one, or the reported cause is a lie.
                 throw new FessSystemException("Failed to access meta data.", e);
             }
+
+            // The extractor hints have to be resolved before any large object is
+            // converted. Reading them lazily made a hint apply only when its column
+            // happened to precede the large object in the SELECT list, so reordering the
+            // select list silently changed which extractor ran.
+            final Set<Integer> resolved = new HashSet<>();
+            for (final String hintColumn : hintColumnLabels()) {
+                for (int i = 0; i < labels.length; i++) {
+                    if (hintColumn.equals(labels[i])) {
+                        if (resolved.add(i)) {
+                            readColumnInto(resultSet, labels, i);
+                        }
+                        break;
+                    }
+                }
+            }
+
+            for (int i = 0; i < labels.length; i++) {
+                // Each column is read exactly once: the hint columns were read above.
+                if (!resolved.contains(i)) {
+                    readColumnInto(resultSet, labels, i);
+                }
+            }
+        }
+
+        /**
+         * Reads one column and publishes it under its label.
+         *
+         * <p>
+         * A column that cannot be read is dropped with a warning so the rest of the
+         * row stays usable. Extraction failures are deliberately not caught here: they
+         * mean the document has no content, which the caller records as a failed row
+         * rather than indexing an empty document.
+         * </p>
+         *
+         * @param resultSet the database result set
+         * @param labels the column labels of the result set
+         * @param index the zero-based column position
+         */
+        protected void readColumnInto(final ResultSet resultSet, final String[] labels, final int index) {
+            try {
+                paramMap.put(labels[index], getColumnValue(resultSet, index + 1));
+            } catch (final IOException | SQLException e) {
+                logger.warn("Failed to parse data in a result set. The column is {}.", labels[index], e);
+            }
+        }
+
+        /**
+         * The column labels named by the extractor hint parameters, if any.
+         *
+         * @return the labels of the mimetype and filename columns
+         */
+        protected List<String> hintColumnLabels() {
+            final FessConfig fessConfig = ComponentUtil.getFessConfig();
+            final List<String> hintLabels = new ArrayList<>(2);
+            if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldMimetype()) instanceof final String mimetypeField) {
+                hintLabels.add(mimetypeField);
+            }
+            if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldFilename()) instanceof final String filenameField) {
+                hintLabels.add(filenameField);
+            }
+            return hintLabels;
+        }
+
+        /**
+         * Extracts text from binary content, applying whichever type hint is configured.
+         *
+         * @param in the binary content
+         * @return the extracted text
+         */
+        protected String extractContent(final InputStream in) {
+            final FessConfig fessConfig = ComponentUtil.getFessConfig();
+            final ExtractorBuilder builder = ComponentUtil.getExtractorFactory().builder(in, null);
+            if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldMimetype()) instanceof final String mimetypeField
+                    && paramMap.get(mimetypeField) instanceof final String mimetype) {
+                builder.mimeType(mimetype);
+            } else if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldFilename()) instanceof final String filenameField
+                    && paramMap.get(filenameField) instanceof final String filename) {
+                builder.filename(filename);
+            } else if (paramMap.get(DEFAULT_MIMETYPE) instanceof final String defaultMimetype) {
+                builder.mimeType(defaultMimetype);
+            }
+            return builder.extract().getContent();
         }
 
         /**
@@ -410,22 +493,17 @@ public class DatabaseDataStore extends AbstractDataStore {
             final Object obj = resultSet.getObject(columnIndex);
             if (obj instanceof final Blob value) {
                 try (final InputStream in = value.getBinaryStream()) {
-                    final FessConfig fessConfig = ComponentUtil.getFessConfig();
-                    final ExtractorBuilder builder = ComponentUtil.getExtractorFactory().builder(in, null);
-                    if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldMimetype()) instanceof final String mimetypeField
-                            && paramMap.get(mimetypeField) instanceof final String mimetype) {
-                        builder.mimeType(mimetype);
-                    } else if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldFilename()) instanceof final String filenameField
-                            && paramMap.get(filenameField) instanceof final String filename) {
-                        builder.filename(filename);
-                    } else if (paramMap.get(DEFAULT_MIMETYPE) instanceof final String defaultMimetype) {
-                        builder.mimeType(defaultMimetype);
-                    }
-                    return builder.extract().getContent();
+                    return extractContent(in);
                 }
             }
             if (obj instanceof final byte[] value) {
-                return new String(value, StandardCharsets.UTF_8);
+                // Which of these two branches a binary column takes is decided by the
+                // driver, not by the schema: H2 hands back a Blob while MySQL and
+                // PostgreSQL hand back a byte array. Both have to extract, otherwise the
+                // same table yields different content depending on the driver.
+                try (final InputStream in = new ByteArrayInputStream(value)) {
+                    return extractContent(in);
+                }
             } else if (obj instanceof final Clob value) {
                 try (final Reader reader = value.getCharacterStream()) {
                     return ReaderUtil.readText(reader);
@@ -438,18 +516,7 @@ public class DatabaseDataStore extends AbstractDataStore {
                 return value.getObject().toString();
             } else if (obj instanceof final InputStream value) {
                 try {
-                    final FessConfig fessConfig = ComponentUtil.getFessConfig();
-                    final ExtractorBuilder builder = ComponentUtil.getExtractorFactory().builder(value, null);
-                    if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldMimetype()) instanceof final String mimetypeField
-                            && paramMap.get(mimetypeField) instanceof final String mimetype) {
-                        builder.mimeType(mimetype);
-                    } else if (paramMap.get(COLUMN_LABEL_PREFIX + fessConfig.getIndexFieldFilename()) instanceof final String filenameField
-                            && paramMap.get(filenameField) instanceof final String filename) {
-                        builder.filename(filename);
-                    } else if (paramMap.get(DEFAULT_MIMETYPE) instanceof final String defaultMimetype) {
-                        builder.mimeType(defaultMimetype);
-                    }
-                    return builder.extract().getContent();
+                    return extractContent(value);
                 } finally {
                     IOUtils.closeQuietly(value);
                 }
@@ -460,12 +527,23 @@ public class DatabaseDataStore extends AbstractDataStore {
                     IOUtils.closeQuietly(value);
                 }
             } else if (obj instanceof final Array value) {
-                final ResultSet subResultSet = value.getResultSet();
-                final StringBuilder buf = new StringBuilder();
-                for (int i = 0; i < subResultSet.getMetaData().getColumnCount(); i++) {
-                    buf.append(subResultSet.getString(i + 1)).append(' ');
+                // Array#getResultSet() yields one row per element, with the index in
+                // column 1 and the value in column 2. The rows have to be stepped
+                // through: reading before the first next() throws, and the column count
+                // is 2 however many elements the array holds.
+                try (final ResultSet subResultSet = value.getResultSet()) {
+                    final StringBuilder buf = new StringBuilder();
+                    while (subResultSet.next()) {
+                        final String element = subResultSet.getString(2);
+                        if (element != null) {
+                            if (buf.length() > 0) {
+                                buf.append(' ');
+                            }
+                            buf.append(element);
+                        }
+                    }
+                    return buf.toString();
                 }
-                return buf.toString().trim();
             } else if (obj == null) {
                 return StringUtil.EMPTY;
             }
