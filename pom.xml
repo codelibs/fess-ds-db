@@ -17,6 +17,9 @@
 		<version>15.9.0-SNAPSHOT</version>
 		<relativePath />
 	</parent>
+	<properties>
+		<testcontainers.version>1.21.4</testcontainers.version>
+	</properties>
 	<build>
 		<plugins>
 			<plugin>
@@ -133,6 +136,40 @@
 			<groupId>com.h2database</groupId>
 			<artifactId>h2</artifactId>
 			<version>2.4.240</version>
+			<scope>test</scope>
+		</dependency>
+		<!-- Real MySQL and PostgreSQL servers, for the behaviour that differs between
+		     JDBC drivers and cannot be reproduced on H2. These tests disable themselves
+		     when Docker is not available. Testcontainers 2.x does not publish the
+		     per-database modules, so the 1.x line is used. -->
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>mysql</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+			<version>9.7.0</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.postgresql</groupId>
+			<artifactId>postgresql</artifactId>
+			<version>42.7.13</version>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
