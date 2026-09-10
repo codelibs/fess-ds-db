@@ -45,7 +45,7 @@ import org.codelibs.fess.opensearch.config.exentity.CrawlingConfig;
 import org.codelibs.fess.opensearch.config.exentity.DataConfig;
 import org.codelibs.fess.opensearch.config.exentity.FailureUrl;
 import org.codelibs.fess.script.ScriptEngineFactory;
-import org.codelibs.fess.script.groovy.GroovyEngine;
+import org.codelibs.fess.script.javascript.JavaScriptEngine;
 import org.codelibs.fess.util.ComponentUtil;
 import org.junit.jupiter.api.TestInfo;
 
@@ -58,9 +58,10 @@ import org.junit.jupiter.api.TestInfo;
  * Script templates in these tests are written as bare column labels.
  * {@code convertValue} returns the parameter map entry directly when the
  * template is an exact key, so the assertions describe what the data store puts
- * into the map without dragging a script engine into them. The real Groovy
- * engine is registered all the same, so a template that does <em>not</em>
- * resolve behaves the way it would on a live server.
+ * into the map without dragging a script engine into them. A real engine is
+ * registered all the same, so a template that does <em>not</em> resolve behaves
+ * the way it would on a live server. That engine is the JavaScript one bundled
+ * in fess core; Groovy now ships separately as fess-script-groovy.
  * </p>
  */
 public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
@@ -110,9 +111,9 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
 
         final ScriptEngineFactory scriptEngineFactory = new ScriptEngineFactory();
         ComponentUtil.register(scriptEngineFactory, "scriptEngineFactory");
-        final GroovyEngine groovyEngine = new GroovyEngine();
-        groovyEngine.init();
-        groovyEngine.register();
+        final JavaScriptEngine javaScriptEngine = new JavaScriptEngine();
+        javaScriptEngine.init();
+        javaScriptEngine.register();
     }
 
     // ------------------------------------------------------------------
@@ -151,6 +152,10 @@ public abstract class AbstractDatabaseDataStoreTestCase extends UnitDsTestCase {
             paramMap.put("password", dbPassword());
         }
         paramMap.put("sql", sql);
+        // A data store resolves an unset script_type to the legacy "groovy" name, which now lives in
+        // the fess-script-groovy plugin. Name the JavaScript engine that ships in fess core instead;
+        // it is the one registered in setUp.
+        paramMap.put("script_type", "javascript");
         return paramMap;
     }
 
